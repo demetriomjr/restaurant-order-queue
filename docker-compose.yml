@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # Banco de dados PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: restaurant-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: restaurant_order
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Message Broker RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: restaurant-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Command Service (GraphQL mutations)
+  command-service:
+    build:
+      context: ./command-service
+      dockerfile: Dockerfile
+    container_name: command-service
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/restaurant_order?schema=public
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      NODE_ENV: development
+    ports:
+      - "4001:4001"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./command-service:/app
+      - /app/node_modules
+
+  # Query Service (GraphQL queries + SSE)
+  query-service:
+    build:
+      context: ./query-service
+      dockerfile: Dockerfile
+    container_name: query-service
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/restaurant_order?schema=public
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      NODE_ENV: development
+    ports:
+      - "4002:4002"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./query-service:/app
+      - /app/node_modules
+
+  # Frontend (React + Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    environment:
+      VITE_API_URL: http://localhost:4002
+    ports:
+      - "5173:5173"
+    depends_on:
+      - command-service
+      - query-service
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  # Kitchen Display (Cozinha)
+  kitchen-frontend:
+    build:
+      context: ./kitchen-frontend
+      dockerfile: Dockerfile
+    container_name: kitchen-frontend
+    environment:
+      VITE_API_URL: http://localhost:4002
+    ports:
+      - "5174:5174"
+    depends_on:
+      - command-service
+      - query-service
+    volumes:
+      - ./kitchen-frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  default:
+    name: restaurant-network

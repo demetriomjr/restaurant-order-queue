@@ -1,0 +1,21 @@
+{
+  "name": "restaurant-order-queue",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Restaurant Order Queue - CQRS + Microservices",
+  "scripts": {
+    "dev": "echo 'Use npm run dev in each service folder'",
+    "test": "npm run test --workspaces --if-present",
+    "test:unit": "cd command-service && npm run test",
+    "test:integration": "echo 'Run integration tests: npm run test:integration'",
+    "test:e2e": "cd e2e-tests && npm run test",
+    "install:all": "npm install && cd command-service && npm install && cd ../query-service && npm install && cd ../frontend && npm install && cd ../kitchen-frontend && npm install && cd ../e2e-tests && npm install"
+  },
+  "workspaces": [
+    "command-service",
+    "query-service",
+    "frontend",
+    "kitchen-frontend"
+  ]
+}
+}

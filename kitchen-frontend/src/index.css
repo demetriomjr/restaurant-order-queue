@@ -1,0 +1,92 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.kitchen-card {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.kitchen-card:hover {
+  border-color: #e94560;
+  transform: scale(1.01);
+}
+
+.status-pending {
+  border-left: 4px solid #f39c12;
+}
+
+.status-confirmed {
+  border-left: 4px solid #3498db;
+}
+
+.status-preparing {
+  border-left: 4px solid #9b59b6;
+  animation: pulse-border 2s infinite;
+}
+
+.status-ready {
+  border-left: 4px solid #00d9ff;
+}
+
+.status-delivered {
+  border-left: 4px solid #27ae60;
+  opacity: 0.6;
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: #9b59b6;
+  }
+  50% {
+    border-color: #e94560;
+  }
+}
+
+.priority-high {
+  border: 2px solid #e94560;
+}
+
+.priority-medium {
+  border: 2px solid #f39c12;
+}
+
+.timer-warning {
+  color: #e94560;
+  font-weight: bold;
+}
+
+.timer-normal {
+  color: #00d9ff;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0f3460;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e94560;
+}
