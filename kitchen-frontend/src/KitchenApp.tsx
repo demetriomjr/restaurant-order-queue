@@ -8,7 +8,7 @@ import {
   PlayCircleOutlined,
   CheckOutlined,
   CarOutlined,
-  KitchenOutlined
+  CoffeeOutlined
 } from '@ant-design/icons';
 import { useKitchenOrders, useUpdateOrderStatus, useSSE, formatElapsedTime } from '../hooks/useKitchen';
 
@@ -37,7 +37,7 @@ interface Order {
 const statusConfig: Record<OrderStatus, { color: string; label: string; icon: any; nextStatus?: OrderStatus }> = {
   PENDING: { color: 'orange', label: 'Pendente', icon: <BellOutlined />, nextStatus: 'CONFIRMED' },
   CONFIRMED: { color: 'blue', label: 'Confirmado', icon: <CheckCircleOutlined />, nextStatus: 'PREPARING' },
-  PREPARING: { color: 'purple', label: 'Preparando', icon: <KitchenOutlined />, nextStatus: 'READY' },
+  PREPARING: { color: 'purple', label: 'Preparando', icon: <CoffeeOutlined />, nextStatus: 'READY' },
   READY: { color: 'cyan', label: 'Pronto', icon: <PlayCircleOutlined />, nextStatus: 'DELIVERED' },
   DELIVERED: { color: 'green', label: 'Entregue', icon: <CarOutlined /> },
   COMPLETED: { color: 'default', label: 'Finalizado', icon: <CheckOutlined /> }
@@ -125,7 +125,7 @@ function OrderCard({ order, onUpdateStatus }: { order: Order; onUpdateStatus: (i
 
 export default function KitchenApp() {
   const { orders, loading } = useKitchenOrders();
-  const { updateStatus, loading: updating } = useUpdateOrderStatus();
+  const { updateStatus } = useUpdateOrderStatus();
   const { connected } = useSSE();
 
   const handleUpdateStatus = async (orderId: string, status: string) => {
@@ -154,7 +154,7 @@ export default function KitchenApp() {
       <div style={{ marginBottom: 24 }}>
         <Row justify="space-between" align="middle">
           <Space>
-            <KitchenOutlined style={{ fontSize: 32, color: '#e94560' }} />
+            <CoffeeOutlined style={{ fontSize: 32, color: '#e94560' }} />
             <div>
               <Title level={2} style={{ margin: 0, color: '#fff' }}>
                 Kitchen Display
@@ -199,7 +199,7 @@ export default function KitchenApp() {
                 title={<Text style={{ color: '#888' }}>Preparando</Text>} 
                 value={preparingOrders.length} 
                 valueStyle={{ color: '#9b59b6', fontSize: 36 }}
-                prefix={<KitchenOutlined />}
+                prefix={<CoffeeOutlined />}
               />
             </Card>
           </Col>

@@ -1,5 +1,5 @@
 import { Badge, Card, Col, Row, Typography, Button, InputNumber, Space, message, List, Tag, Divider, Empty } from 'antd';
-import { ShoppingCartOutlined, RestaurantOutlined, CoffeeOutlined, FireOutlined } from '@ant-design/icons';
+import { ShoppingCartOutlined, CoffeeOutlined, FireOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useMenu, useActiveOrders, useCreateOrder } from '../hooks/useOrder';
 import { useCartStore } from '../stores/cartStore';
 import { useState, useMemo } from 'react';
@@ -15,15 +15,15 @@ interface MenuItem {
 }
 
 const categoryConfig: Record<string, { icon: any; color: string; gradient: string }> = {
-  'Pratos Principais': { icon: <RestaurantOutlined />, color: '#B8860B', gradient: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)' },
+  'Pratos Principais': { icon: <GlobalOutlined />, color: '#B8860B', gradient: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)' },
   'Entradas': { icon: <FireOutlined />, color: '#C62828', gradient: 'linear-gradient(135deg, #C62828 0%, #8E0000 100%)' },
-  'Saladas': { icon: <RestaurantOutlined />, color: '#2E7D32', gradient: 'linear-gradient(135deg, #43A047 0%, #2E7D32 100%)' },
-  'Acompanhamentos': { icon: <RestaurantOutlined />, color: '#F57C00', gradient: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)' },
+  'Saladas': { icon: <GlobalOutlined />, color: '#2E7D32', gradient: 'linear-gradient(135deg, #43A047 0%, #2E7D32 100%)' },
+  'Acompanhamentos': { icon: <GlobalOutlined />, color: '#F57C00', gradient: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)' },
   'Bebidas Não Alcoólicas': { icon: <CoffeeOutlined />, color: '#1565C0', gradient: 'linear-gradient(135deg, #1976D2 0%, #1565C0 100%)' },
   'Cervejas': { icon: <CoffeeOutlined />, color: '#F9A825', gradient: 'linear-gradient(135deg, #FBC02D 0%, #F9A825 100%)' },
   'Vinhos': { icon: <CoffeeOutlined />, color: '#7B1FA2', gradient: 'linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%)' },
   'Drinks': { icon: <CoffeeOutlined />, color: '#00838F', gradient: 'linear-gradient(135deg, #00ACC1 0%, #00838F 100%)' },
-  'Sobremesas': { icon: <RestaurantOutlined />, color: '#E91E63', gradient: 'linear-gradient(135deg, #EC407A 0%, #E91E63 100%)' },
+  'Sobremesas': { icon: <GlobalOutlined />, color: '#E91E63', gradient: 'linear-gradient(135deg, #EC407A 0%, #E91E63 100%)' },
 };
 
 function MenuCard({ item, onAdd }: { item: MenuItem; onAdd: (item: MenuItem) => void }) {
@@ -200,7 +200,7 @@ export default function MenuPage() {
                 justifyContent: 'center',
                 boxShadow: '0 4px 16px rgba(184, 134, 11, 0.3)'
               }}>
-                <RestaurantOutlined style={{ fontSize: 28, color: 'white' }} />
+                <GlobalOutlined style={{ fontSize: 28, color: 'white' }} />
               </div>
               <div>
                 <Title level={2} style={{ margin: 0, fontFamily: "'Playfair Display', serif" }}>
@@ -276,11 +276,13 @@ export default function MenuPage() {
                 ) : (
                   <List
                     dataSource={items}
-                    renderItem={item => (
+                    renderItem={(item) => (
                       <List.Item
+                        key={item.productId}
                         style={{ padding: '12px 0', borderBottom: '1px solid #E8E2DC' }}
                         actions={[
                           <Button 
+                            key="remove"
                             type="text" 
                             danger 
                             size="small"

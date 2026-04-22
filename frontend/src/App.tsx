@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Layout, Menu, Typography, Space } from 'antd';
-import { AppstoreOutlined, UnorderedListOutlined, RestaurantOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, UnorderedListOutlined, CoffeeOutlined } from '@ant-design/icons';
 import MenuPage from './pages/MenuPage';
 import OrderStatusPage from './pages/OrderStatusPage';
 
@@ -36,7 +36,7 @@ function AppLayout() {
             justifyContent: 'center',
             boxShadow: '0 2px 8px rgba(184, 134, 11, 0.3)'
           }}>
-            <RestaurantOutlined style={{ fontSize: 22, color: 'white' }} />
+            <CoffeeOutlined style={{ fontSize: 22, color: 'white' }} />
           </div>
           <div>
             <Text strong style={{ fontSize: 18, fontFamily: "'Playfair Display', serif", color: '#2C1810' }}>

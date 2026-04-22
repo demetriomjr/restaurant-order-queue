@@ -184,6 +184,37 @@ Este documento registra o histórico de decisões e prompts durante o desenvolvi
 - ✅ Configuração Vitest no command-service
 - ✅ Configuração Playwright com Chromium
 - ✅ Scripts no package.json raiz para rodar todos os testes
+- ✅ ESLint configurado em todos os projetos
+- ✅ Regras: no-unused-vars (error), no-explicit-any (off), no-console (warning)
+
+---
+
+### 2026-04-22 - ESLint e Boas Práticas
+
+**Prompt Original:**
+> "Eu quero o ESLint estar em todos os projetos, porque a gente vai seguir à risca todas as boas práticas de TypeScript e de tipagem forte, por favor. E aí você já pode ver o que que tem de errado e já corrigir. A gente vai usar as melhores práticas possíveis relacionadas a esse design."
+
+**Decisões Tomadas:**
+- ✅ ESLint instalado em todos os projetos (command-service, query-service, frontend, kitchen-frontend)
+- ✅ Plugins: @typescript-eslint/eslint-plugin, @typescript-eslint/parser, eslint-plugin-import
+- ✅ Scripts npm run lint e npm run lint:fix em todos os projetos
+- ✅ Corrigidos todos os erros de lint (imports, unused vars, keys em arrays)
+- ✅ Warnings de console mantidos
+
+---
+
+### 2026-04-22 - Configuração de Portas, CORS e Environment
+
+**Prompt Original:**
+> "como que tá a configuração de porta e os arquivos env nos projetos? A gente tem que ter o CORS também, tá? Apesar de ser um projeto de portfólio, o CORS é essencial nesse tipo de ambiente. E eu preciso do arquivo env criado já. Então tu vai criar o env.example e também já pode criar o env com os dados mockados aí pra gente começar os testes local. Eu tenho certo receio com a porta do backend, tá? Porque eu estou desenvolvendo outros apps. Então, se der pra configurar um range de porta pra ele sempre tentar usar a próxima porta..."
+
+**Decisões Tomadas:**
+- ✅ Auto-detecção de portas: tenta range 4001-4010
+- ✅ CORS configurado via variável `CORS_ORIGIN`
+- ✅ Arquivos `.env` criados com dados mockados em todos os projetos
+- ✅ Arquivos `.env.example` criados para referência
+- ✅ Frontend usa variáveis `VITE_API_URL` e `VITE_COMMAND_API_URL`
+- ✅ .env ignorado no git, .env.example versionado
 
 ---
 

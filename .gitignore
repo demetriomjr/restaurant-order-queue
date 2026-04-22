@@ -10,6 +10,7 @@ build/
 .env
 .env.local
 .env.*.local
+# Keep .env.example for reference
 
 # IDE
 .idea/

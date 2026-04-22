@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation, useSubscription } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import { GET_MENU, GET_ACTIVE_ORDERS, CREATE_ORDER, ORDER_UPDATED_SUBSCRIPTION } from '../apollo/queries';
 
 interface MenuItem {

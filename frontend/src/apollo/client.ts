@@ -3,16 +3,19 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { createClient } from 'graphql-ws';
 import { getMainDefinition } from '@apollo/client/utilities';
 
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4002';
+const commandApiUrl = import.meta.env.VITE_COMMAND_API_URL || 'http://localhost:4001';
+
 const COMMAND_HTTP_LINK = new HttpLink({
-  uri: 'http://localhost:4001/graphql'
+  uri: `${commandApiUrl}/graphql`
 });
 
 const QUERY_HTTP_LINK = new HttpLink({
-  uri: 'http://localhost:4002/graphql'
+  uri: `${apiUrl}/graphql`
 });
 
 const wsLink = new GraphQLWsLink(createClient({
-  url: 'ws://localhost:4002/graphql'
+  url: `ws://${apiUrl.replace('http', 'ws')}/graphql`
 }));
 
 const splitLink = split(

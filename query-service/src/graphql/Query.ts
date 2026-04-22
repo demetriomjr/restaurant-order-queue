@@ -1,6 +1,6 @@
 import { createSchema } from 'nexus';
 import { pubsub } from './pubsub.js';
-import { readModelRepository, menuRepository } from '../../infrastructure/persistence.js';
+import { readModelRepository } from '../../infrastructure/persistence.js';
 
 export const Query = createSchema({
   queries: (t) => ({

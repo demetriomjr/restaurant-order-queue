@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Typography, Space, Tag, Progress, Card, Row, Col, Timeline, Descriptions, Button, List, Badge, Divider, Empty } from 'antd';
-import { ClockCircleOutlined, CheckCircleOutlined, SyncOutlined, RestaurantOutlined, RightOutlined } from '@ant-design/icons';
+import { Typography, Space, Tag, Progress, Card, Row, Col, Descriptions, List, Badge, Divider, Empty } from 'antd';
+import { ClockCircleOutlined, CheckCircleOutlined, SyncOutlined, CoffeeOutlined } from '@ant-design/icons';
 import { useActiveOrders, useSSEConnection } from '../hooks/useOrder';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 const statusFlow = [
   { status: 'PENDING', label: 'Pendente', color: 'orange' },
@@ -100,9 +100,9 @@ function StatusTimeline({ status }: { status: string }) {
   );
 }
 
-function OrderCard({ order }: { order: any }) {
+function OrderCard({ order }: { order: { id: string; tableId: string; status: string; total: number; items: Array<{ productId: string; productName: string; quantity: number; unitPrice: number }>; updatedAt: string } }) {
   const currentStep = getStepIndex(order.status);
-  const items = order.items as any[] || [];
+  const items = order.items || [];
 
   return (
     <Card 
@@ -120,7 +120,7 @@ function OrderCard({ order }: { order: any }) {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space>
-            <RestaurantOutlined style={{ fontSize: 24 }} />
+            <CoffeeOutlined style={{ fontSize: 24 }} />
             <Title level={4} style={{ color: 'white', margin: 0, fontFamily: "'Playfair Display', serif" }}>
               Pedido #{order.id.slice(0, 8)}
             </Title>
@@ -175,7 +175,7 @@ function OrderCard({ order }: { order: any }) {
               size="small"
               dataSource={items}
               style={{ maxHeight: 250, overflow: 'auto' }}
-              renderItem={(item: any, index: number) => (
+              renderItem={(item, index) => (
                 <List.Item style={{ padding: '12px 0', borderBottom: index === items.length - 1 ? 'none' : '1px solid #E8E2DC' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                     <div>
@@ -224,7 +224,7 @@ export default function OrderStatusPage() {
               justifyContent: 'center',
               boxShadow: '0 4px 16px rgba(184, 134, 11, 0.3)'
             }}>
-              <RestaurantOutlined style={{ fontSize: 28, color: 'white' }} />
+              <CoffeeOutlined style={{ fontSize: 28, color: 'white' }} />
             </div>
             <div>
               <Title level={2} style={{ margin: 0, fontFamily: "'Playfair Display', serif" }}>
@@ -267,8 +267,8 @@ export default function OrderStatusPage() {
         </Card>
       ) : (
         <div className="fade-in-up">
-          {orders.map((order, idx) => (
-            <div key={order.id} style={{ animationDelay: `${idx * 100}ms` }}>
+          {orders.map((order) => (
+            <div key={order.id}>
               <OrderCard order={order} />
             </div>
           ))}

@@ -1,11 +1,25 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Order, OrderItem } from '@prisma/client';
 import * as amqp from 'amqplib';
-import { eventBus, DomainEvent } from '../../domain/events.js';
+import {
+  EventBus,
+  OrderCreatedEvent,
+  OrderStatusChangedEvent,
+  OrderItemAddedEvent,
+  OrderItemRemovedEvent
+} from '../../domain/events.js';
 
 const prisma = new PrismaClient();
 let channel: amqp.Channel;
 
-async function connectRabbitMQ() {
+interface OrderItemInput {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  notes?: string;
+}
+
+async function connectRabbitMQ(): Promise<void> {
   const url = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
   const connection = await amqp.connect(url);
   channel = connection.createChannel();
@@ -13,7 +27,7 @@ async function connectRabbitMQ() {
   console.log('Connected to RabbitMQ');
 }
 
-function publishToRabbitMQ(event: DomainEvent) {
+function publishToRabbitMQ(event: EventBus): void {
   if (channel) {
     channel.publish(
       'domain_events',
@@ -23,15 +37,17 @@ function publishToRabbitMQ(event: DomainEvent) {
   }
 }
 
-eventBus.on('ORDER_CREATED', (event) => publishToRabbitMQ(event));
-eventBus.on('ORDER_STATUS_CHANGED', (event) => publishToRabbitMQ(event));
-eventBus.on('ORDER_ITEM_ADDED', (event) => publishToRabbitMQ(event));
-eventBus.on('ORDER_ITEM_REMOVED', (event) => publishToRabbitMQ(event));
+const eventBus = new EventBus();
+
+eventBus.on('ORDER_CREATED', (event: OrderCreatedEvent) => publishToRabbitMQ(event));
+eventBus.on('ORDER_STATUS_CHANGED', (event: OrderStatusChangedEvent) => publishToRabbitMQ(event));
+eventBus.on('ORDER_ITEM_ADDED', (event: OrderItemAddedEvent) => publishToRabbitMQ(event));
+eventBus.on('ORDER_ITEM_REMOVED', (event: OrderItemRemovedEvent) => publishToRabbitMQ(event));
 
 export const orderRepository = {
-  async create(data: { tableId: string; items: any[] }) {
+  async create(data: { tableId: string; items: OrderItemInput[] }): Promise<Order & { items: OrderItem[] }> {
     const total = data.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-    
+
     const order = await prisma.order.create({
       data: {
         tableId: data.tableId,
@@ -43,7 +59,7 @@ export const orderRepository = {
       include: { items: true }
     });
 
-    eventBus.publish(new (require('../../domain/events.js').OrderCreatedEvent)({
+    eventBus.publish(new OrderCreatedEvent({
       orderId: order.id,
       tableId: order.tableId,
       items: order.items
@@ -52,18 +68,18 @@ export const orderRepository = {
     return order;
   },
 
-  async findById(id: string) {
+  async findById(id: string): Promise<Order & { items: OrderItem[] } | null> {
     return prisma.order.findUnique({ where: { id }, include: { items: true } });
   },
 
-  async updateStatus(id: string, status: string) {
+  async updateStatus(id: string, status: string): Promise<Order & { items: OrderItem[] }> {
     const order = await prisma.order.update({
       where: { id },
-      data: { status: status as any },
+      data: { status: status as 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'DELIVERED' | 'COMPLETED' },
       include: { items: true }
     });
 
-    eventBus.publish(new (require('../../domain/events.js').OrderStatusChangedEvent)({
+    eventBus.publish(new OrderStatusChangedEvent({
       orderId: order.id,
       tableId: order.tableId,
       oldStatus: 'UNKNOWN',
@@ -73,7 +89,7 @@ export const orderRepository = {
     return order;
   },
 
-  async addItem(orderId: string, item: any) {
+  async addItem(orderId: string, item: OrderItemInput): Promise<Order & { items: OrderItem[] }> {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new Error('Order not found');
 
@@ -90,7 +106,7 @@ export const orderRepository = {
       })
     ]);
 
-    eventBus.publish(new (require('../../domain/events.js').OrderItemAddedEvent)({
+    eventBus.publish(new OrderItemAddedEvent({
       orderId,
       tableId: order.tableId,
       item
@@ -99,7 +115,7 @@ export const orderRepository = {
     return updatedOrder;
   },
 
-  async removeItem(orderId: string, productId: string) {
+  async removeItem(orderId: string, productId: string): Promise<Order & { items: OrderItem[] }> {
     const item = await prisma.orderItem.findFirst({
       where: { orderId, productId }
     });
@@ -117,7 +133,7 @@ export const orderRepository = {
       prisma.orderItem.delete({ where: { id: item.id } })
     ]);
 
-    eventBus.publish(new (require('../../domain/events.js').OrderItemRemovedEvent)({
+    eventBus.publish(new OrderItemRemovedEvent({
       orderId,
       tableId: order!.tableId,
       productId

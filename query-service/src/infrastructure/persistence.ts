@@ -102,8 +102,7 @@ export const readModelRepository = {
   async updateStatus(orderId: string, status: string) {
     return prisma.orderRead.update({
       where: { id: orderId },
-      data: { status, updatedAt: new Date() },
-      include: { items as any }
+      data: { status, updatedAt: new Date() }
     });
   },
 

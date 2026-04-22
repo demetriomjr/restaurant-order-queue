@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ApolloProvider } from '@apollo/client'
-import { ConfigProvider, theme } from 'antd'
+import { ConfigProvider } from 'antd'
 import ptBR from 'antd/locale/pt_BR'
 import { apolloClient } from './apollo/client'
 import App from './App'

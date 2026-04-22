@@ -147,6 +147,37 @@ cd frontend && npm run dev
 cd kitchen-frontend && npm run dev
 ```
 
+### Variáveis de Ambiente
+
+Cada projeto possui `.env.example` e `.env` configurados:
+
+```bash
+# command-service/.env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/restaurant_order"
+RABBITMQ_URL="amqp://guest:guest@localhost:5672"
+CORS_ORIGIN="http://localhost:5173,http://localhost:5174"
+PORT=4001
+
+# query-service/.env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/restaurant_order"
+RABBITMQ_URL="amqp://guest:guest@localhost:5672"
+CORS_ORIGIN="http://localhost:5173,http://localhost:5174"
+PORT=4002
+
+# frontend/.env
+VITE_API_URL="http://localhost:4002"
+VITE_COMMAND_API_URL="http://localhost:4001"
+
+# kitchen-frontend/.env
+VITE_API_URL="http://localhost:4002"
+```
+
+### Auto-detecção de Portas
+
+Os serviços detectam automaticamente se a porta padrão está em uso e tentam a próxima:
+- Command Service: tenta 4001 → 4010
+- Query Service: tenta 4002 (mas usa range 4001-4010)
+
 ### Opção 3: Produção (Docker)
 
 ```bash
@@ -156,7 +187,7 @@ docker-compose up --build
 
 ## 📡 API GraphQL
 
-### Command Service (port 4001)
+### Command Service (port 4001, auto-incrementa 4001-4010)
 
 ```graphql
 # Criar pedido
@@ -192,7 +223,7 @@ mutation RemoveOrderItem($orderId: ID!, $productId: String!) {
 }
 ```
 
-### Query Service (port 4002)
+### Query Service (port 4002, auto-incrementa)
 
 ```graphql
 # Buscar pedidos por mesa
@@ -269,9 +300,18 @@ const es = new EventSource('http://localhost:4002/sse/table/all');
 - **RabbitMQ**: Message broker para comunicação entre serviços
 - **Nexus**: Schema definition em código TypeScript
 
-## 🧪 Testes
+## 🧪 Testes e Qualidade de Código
 
 ```bash
+# Lint - Verificar erros de código
+cd command-service && npm run lint
+cd query-service && npm run lint
+cd frontend && npm run lint
+cd kitchen-frontend && npm run lint
+
+# Lint - Corrigir automaticamente
+cd command-service && npm run lint:fix
+
 # Testes Unitários
 cd command-service && npm run test
 
@@ -281,6 +321,13 @@ cd integration-tests && npm install && npm test
 # Testes E2E (serviços devem estar rodando)
 cd e2e-tests && npm install && npx playwright install chromium && npm test
 ```
+
+### Regras ESLint
+
+- `@typescript-eslint/no-unused-vars`: Error
+- `@typescript-eslint/no-explicit-any`: Off (facilita desenvolvimento)
+- `no-console`: Warning
+- Importe extensions desabilitados para compatibilidade com TypeScript
 
 ## 📄 Licença
 

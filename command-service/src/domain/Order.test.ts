@@ -1,108 +1,108 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+
+interface OrderItemProps {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  notes?: string;
+}
+
+interface OrderProps {
+  id?: string;
+  tableId: string;
+  items: OrderItemProps[];
+  status?: string;
+  total?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+class OrderItem {
+  constructor(
+    public readonly productId: string,
+    public readonly productName: string,
+    public readonly quantity: number,
+    public readonly unitPrice: number,
+    public readonly notes: string = ''
+  ) {}
+
+  get total(): number {
+    return this.quantity * this.unitPrice;
+  }
+
+  toPlain(): OrderItemProps {
+    return {
+      productId: this.productId,
+      productName: this.productName,
+      quantity: this.quantity,
+      unitPrice: this.unitPrice,
+      notes: this.notes
+    };
+  }
+}
+
+class Order {
+  public readonly id: string;
+  public readonly tableId: string;
+  public readonly items: OrderItem[];
+  public readonly status: string;
+  public readonly total: number;
+  public readonly createdAt: Date;
+  public readonly updatedAt: Date;
+
+  constructor(props: OrderProps) {
+    this.id = props.id || `order-${Date.now()}`;
+    this.tableId = props.tableId;
+    this.items = props.items.map(i => new OrderItem(i.productId, i.productName, i.quantity, i.unitPrice, i.notes));
+    this.status = props.status || 'PENDING';
+    this.total = props.total || this.calculateTotal();
+    this.createdAt = props.createdAt || new Date();
+    this.updatedAt = props.updatedAt || new Date();
+  }
+
+  private calculateTotal(): number {
+    return this.items.reduce((sum, item) => sum + item.total, 0);
+  }
+
+  updateStatus(newStatus: string): Order {
+    return new Order({
+      ...this.toPlain(),
+      status: newStatus,
+      updatedAt: new Date()
+    });
+  }
+
+  addItem(item: OrderItemProps): Order {
+    return new Order({
+      ...this.toPlain(),
+      items: [...this.toPlain().items, item],
+      updatedAt: new Date()
+    });
+  }
+
+  removeItem(productId: string): Order {
+    return new Order({
+      ...this.toPlain(),
+      items: this.toPlain().items.filter(i => i.productId !== productId),
+      updatedAt: new Date()
+    });
+  }
+
+  toPlain(): OrderProps & { items: OrderItemProps[] } {
+    return {
+      id: this.id,
+      tableId: this.tableId,
+      items: this.items.map(i => i.toPlain()),
+      status: this.status,
+      total: this.total,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt
+    };
+  }
+}
 
 describe('Order Entity', () => {
-  interface OrderItemProps {
-    productId: string;
-    productName: string;
-    quantity: number;
-    unitPrice: number;
-    notes?: string;
-  }
-
-  interface OrderProps {
-    id?: string;
-    tableId: string;
-    items: OrderItemProps[];
-    status?: string;
-    total?: number;
-    createdAt?: Date;
-    updatedAt?: Date;
-  }
-
-  class OrderItem {
-    constructor(
-      public readonly productId: string,
-      public readonly productName: string,
-      public readonly quantity: number,
-      public readonly unitPrice: number,
-      public readonly notes: string = ''
-    ) {}
-
-    get total(): number {
-      return this.quantity * this.unitPrice;
-    }
-
-    toPlain(): OrderItemProps {
-      return {
-        productId: this.productId,
-        productName: this.productName,
-        quantity: this.quantity,
-        unitPrice: this.unitPrice,
-        notes: this.notes
-      };
-    }
-  }
-
-  class Order {
-    public readonly id: string;
-    public readonly tableId: string;
-    public readonly items: OrderItem[];
-    public readonly status: string;
-    public readonly total: number;
-    public readonly createdAt: Date;
-    public readonly updatedAt: Date;
-
-    constructor(props: OrderProps) {
-      this.id = props.id || `order-${Date.now()}`;
-      this.tableId = props.tableId;
-      this.items = props.items.map(i => new OrderItem(i.productId, i.productName, i.quantity, i.unitPrice, i.notes));
-      this.status = props.status || 'PENDING';
-      this.total = props.total || this.calculateTotal();
-      this.createdAt = props.createdAt || new Date();
-      this.updatedAt = props.updatedAt || new Date();
-    }
-
-    private calculateTotal(): number {
-      return this.items.reduce((sum, item) => sum + item.total, 0);
-    }
-
-    updateStatus(newStatus: string): Order {
-      return new Order({
-        ...this.toPlain(),
-        status: newStatus,
-        updatedAt: new Date()
-      });
-    }
-
-    addItem(item: OrderItemProps): Order {
-      return new Order({
-        ...this.toPlain(),
-        items: [...this.toPlain().items, item],
-        updatedAt: new Date()
-      });
-    }
-
-    removeItem(productId: string): Order {
-      return new Order({
-        ...this.toPlain(),
-        items: this.toPlain().items.filter(i => i.productId !== productId),
-        updatedAt: new Date()
-      });
-    }
-
-    toPlain(): OrderProps & { items: OrderItemProps[] } {
-      return {
-        id: this.id,
-        tableId: this.tableId,
-        items: this.items.map(i => i.toPlain()),
-        status: this.status,
-        total: this.total,
-        createdAt: this.createdAt,
-        updatedAt: this.updatedAt
-      };
-    }
-  }
-
   describe('Order Creation', () => {
     it('should create an order with correct tableId', () => {
       const order = new Order({
