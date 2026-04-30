@@ -270,3 +270,20 @@ cd kitchen-frontend && npm run dev
 - Cozinha: `http://localhost:5174`
 - Command GraphQL: `http://localhost:4001/graphql`
 - Query GraphQL: `http://localhost:4002/graphql`
+
+---
+
+## E2E (Playwright)
+
+```bash
+cd e2e-tests
+npm install
+npx playwright install chromium
+npm test
+```
+
+Cenários cobertos atualmente:
+- fluxo de sessão e navegação principal do tablet
+- abertura do modal de observação no pedido
+- carregamento do board da cozinha com colunas atuais
+- smoke de API GraphQL (Command + Query) com criação e consulta de pedido

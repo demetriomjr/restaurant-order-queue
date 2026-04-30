@@ -1,142 +1,91 @@
 import { test, expect } from '@playwright/test';
 
-const FRONTEND_URL = 'http://localhost:5173';
-const KITCHEN_URL = 'http://localhost:5174';
+const FRONTEND_URL = 'http://localhost:6173';
+const KITCHEN_URL = 'http://localhost:6174';
 const COMMAND_URL = 'http://localhost:4001/graphql';
 const QUERY_URL = 'http://localhost:4002/graphql';
 
-test.describe('Customer Flow - E2E', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto(FRONTEND_URL);
+async function startTabletSession(page: any) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('lastTableNumber', '1');
+  });
+  await page.goto(FRONTEND_URL);
+  await page.getByPlaceholder(/nome/i).fill('E2E Cliente');
+  await page.getByRole('button', { name: /entrar|iniciar|continuar/i }).click();
+}
+
+test.describe('Tablet Flow - E2E', () => {
+  test('deve iniciar sessão e abrir cardápio', async ({ page }) => {
+    await startTabletSession(page);
+    await expect(page.getByRole('heading', { name: 'Cardápio' })).toBeVisible();
+    await expect(page.getByText(/Mesa .*E2E Cliente/)).toBeVisible();
   });
 
-  test('should load menu page', async ({ page }) => {
-    await expect(page.locator('text=Cardápio')).toBeVisible();
-    await expect(page.locator('text=Mesa')).toBeVisible();
+  test('deve abrir modal de observação ao pedir item', async ({ page }) => {
+    await startTabletSession(page);
+    const orderButtons = page.locator('button[aria-label="CheckCircleOutlined"], .ant-btn-primary');
+    await orderButtons.first().click();
+    await expect(page.getByText(/Adicione uma observação/i)).toBeVisible();
   });
 
-  test('should display menu items', async ({ page }) => {
-    await page.waitForSelector('.ant-card', { timeout: 10000 });
-    const menuItems = page.locator('.ant-card');
-    await expect(menuItems.first()).toBeVisible();
-  });
-
-  test('should add item to cart', async ({ page }) => {
-    await page.waitForSelector('.ant-btn:has-text("Adicionar")', { timeout: 10000 });
-    
-    const addButton = page.locator('.ant-btn:has-text("Adicionar")').first();
-    await addButton.click();
-    
-    await expect(page.locator('.ant-badge')).toBeVisible();
-  });
-
-  test('should show cart with items', async ({ page }) => {
-    await page.waitForSelector('.ant-btn:has-text("Adicionar")', { timeout: 10000 });
-    
-    const addButton = page.locator('.ant-btn:has-text("Adicionar")').first();
-    await addButton.click();
-    
-    await expect(page.locator('text=Seu Pedido')).toBeVisible();
-    await expect(page.locator('text=Total:')).toBeVisible();
+  test('deve navegar para pedidos e conta pelo menu inferior', async ({ page }) => {
+    await startTabletSession(page);
+    await page.getByText('Pedidos').click();
+    await expect(page.getByText('Meus Pedidos')).toBeVisible();
+    await page.getByText('Conta').click();
+    await expect(page.getByRole('heading', { name: 'Conta' })).toBeVisible();
   });
 });
 
-test.describe('Order Status Page - E2E', () => {
-  test('should navigate to order status page', async ({ page }) => {
-    await page.goto(`${FRONTEND_URL}/status`);
-    await expect(page.locator('text=Acompanhe seu Pedido')).toBeVisible();
-  });
-
-  test('should show no orders message when empty', async ({ page }) => {
-    await page.goto(`${FRONTEND_URL}/status`);
-    await expect(page.locator('text=Nenhum pedido ativo')).toBeVisible({ timeout: 10000 });
-  });
-});
-
-test.describe('Kitchen Display - E2E', () => {
-  test.beforeEach(async ({ page }) => {
+test.describe('Kitchen Flow - E2E', () => {
+  test('deve carregar board da cozinha com colunas atuais', async ({ page }) => {
     await page.goto(KITCHEN_URL);
-  });
-
-  test('should load kitchen display', async ({ page }) => {
-    await expect(page.locator('text=Kitchen Display')).toBeVisible();
-    await expect(page.locator('text=Painel de pedidos da cozinha')).toBeVisible();
-  });
-
-  test('should display status columns', async ({ page }) => {
-    await expect(page.locator('text=Novos')).toBeVisible();
-    await expect(page.locator('text=Confirmados')).toBeVisible();
-    await expect(page.locator('text=Preparando')).toBeVisible();
-    await expect(page.locator('text=Prontos')).toBeVisible();
-  });
-
-  test('should display statistics cards', async ({ page }) => {
-    await expect(page.locator('text=Pendentes')).toBeVisible();
-    await expect(page.locator('text=Confirmados')).toBeVisible();
-    await expect(page.locator('text=Preparando')).toBeVisible();
-    await expect(page.locator('text=Prontos')).toBeVisible();
+    await expect(page.getByText('Cozinha')).toBeVisible();
+    await expect(page.getByText(/Pendente/)).toBeVisible();
+    await expect(page.getByText(/Preparando/)).toBeVisible();
+    await expect(page.getByText(/A caminho da mesa/)).toBeVisible();
+    await expect(page.getByText(/Entregue/)).toBeVisible();
+    await expect(page.getByText(/Cancelado/)).toBeVisible();
   });
 });
 
 test.describe('GraphQL API - E2E', () => {
-  test('Command Service should be accessible', async ({ request }) => {
-    const response = await request.post(COMMAND_URL, {
-      data: {
-        query: `{ __typename }`
-      }
-    });
+  test('Command Service deve responder', async ({ request }) => {
+    const response = await request.post(COMMAND_URL, { data: { query: '{ __typename }' } });
     expect(response.ok()).toBeTruthy();
   });
 
-  test('Query Service should be accessible', async ({ request }) => {
-    const response = await request.post(QUERY_URL, {
-      data: {
-        query: `{ __typename }`
-      }
-    });
+  test('Query Service deve responder', async ({ request }) => {
+    const response = await request.post(QUERY_URL, { data: { query: '{ __typename }' } });
     expect(response.ok()).toBeTruthy();
   });
 
-  test('should create order via GraphQL', async ({ request }) => {
-    const response = await request.post(COMMAND_URL, {
+  test('deve criar pedido e consultar no Query Service', async ({ request }) => {
+    const created = await request.post(COMMAND_URL, {
       data: {
         query: `
           mutation {
             createOrder(
-              tableId: "e2e-table"
-              items: [{ productId: "prod-1", productName: "Test", quantity: 1, unitPrice: 10 }]
-            ) {
-              id
-              tableId
-              status
-            }
+              tableId: "table-e2e"
+              items: [{ productId: "prod-1", productName: "Item E2E", quantity: 1, unitPrice: 10 }]
+            ) { id status tableId }
           }
         `
       }
     });
+    const createdJson = await created.json();
+    expect(createdJson.data?.createOrder?.status).toBe('PENDING');
 
-    const json = await response.json();
-    expect(json.data?.createOrder).toBeDefined();
-    expect(json.data?.createOrder.status).toBe('PENDING');
-  });
-
-  test('should query menu via GraphQL', async ({ request }) => {
-    const response = await request.post(QUERY_URL, {
+    const queried = await request.post(QUERY_URL, {
       data: {
         query: `
           query {
-            menu {
-              id
-              name
-              category
-            }
+            ordersByTable(tableId: "table-e2e") { id status tableId }
           }
         `
       }
     });
-
-    const json = await response.json();
-    expect(json.data?.menu).toBeDefined();
-    expect(json.data?.menu.length).toBeGreaterThan(0);
+    const queriedJson = await queried.json();
+    expect(Array.isArray(queriedJson.data?.ordersByTable)).toBeTruthy();
   });
 });

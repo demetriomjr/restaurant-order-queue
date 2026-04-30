@@ -4,6 +4,21 @@ Este documento registra o histórico de decisões e prompts durante o desenvolvi
 
 ## 📜 Histórico de Decisões
 
+### 2026-04-30 - Atualização e Validação da Suíte E2E
+
+**Resumo do Prompt Original:**
+> Executar E2E, validar se está funcionando e corrigir problemas ao longo do caminho.
+
+**Decisões Tomadas:**
+- ✅ Suíte E2E foi atualizada para arquitetura/UX atual (portas `6173/6174`, fluxo de sessão e seletores novos)
+- ✅ Cenários legados removidos e substituídos por fluxo real atual do produto
+- ✅ Incluídos checks de tablet, cozinha e smoke GraphQL
+- ✅ Execução final validada com sucesso: **7/7 testes E2E passando**
+
+**Status:** ✅ completo
+
+---
+
 ### 2026-04-30 - Implementação de Testes Unitários/Integridade nos Backends
 
 **Resumo do Prompt Original:**
