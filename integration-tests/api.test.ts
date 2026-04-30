@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { ApolloClient, InMemoryCache, gql, HttpLink } from '@apollo/client';
 
 const COMMAND_URL = 'http://localhost:4001/graphql';
@@ -237,25 +237,6 @@ describe('Query Service - Integration Tests', () => {
 
       expect(result.data.ordersByTable).toBeDefined();
       expect(Array.isArray(result.data.ordersByTable)).toBe(true);
-    });
-
-    it('should query active orders by table', async () => {
-      const GET_ACTIVE_ORDERS = gql`
-        query GetActiveOrdersByTable($tableId: String!) {
-          activeOrdersByTable(tableId: $tableId) {
-            id
-            status
-          }
-        }
-      `;
-
-      const result = await client.query({
-        query: GET_ACTIVE_ORDERS,
-        variables: { tableId: 'test-table-1' },
-        fetchPolicy: 'network-only'
-      });
-
-      expect(result.data.activeOrdersByTable).toBeDefined();
     });
 
     it('should query all active orders (kitchen view)', async () => {

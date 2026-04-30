@@ -1,342 +1,272 @@
 # Restaurant Order Queue
 
-Sistema de pedidos de restaurante em tempo real com arquitetura CQRS + Microsserviços.
+Sistema de pedidos para restaurante com arquitetura **CQRS + Event-Driven**, atualização em tempo real e dois frontends:
+- **Tablet da mesa** (cliente)
+- **Kitchen Display** (cozinha)
 
-## 🚀 Demo
+Projeto pensado para portfólio, com foco em fluxo real de operação (pedido, preparo, entrega, consumo e encerramento de sessão).
 
-Em desenvolvimento local.
+---
 
-## 📋 Sobre o Projeto
+## Visão Geral
 
-Este é um projeto de portfólio desenvolvido com foco em **vibe coding** - demonstrando o poder de arquiteturas modernas de software através de uma implementação real e funcional.
+O cliente inicia uma sessão na mesa, faz pedidos pelo tablet e acompanha status em tempo real.  
+A cozinha recebe os pedidos em um board com colunas por status e move os cards via drag-and-drop.
 
-O sistema permite que clientes façam pedidos via tablet na mesa e acompanhem o status em tempo real. A cozinha recebe os pedidos em um display dedicado e pode atualizar o status de cada pedido.
+Toda escrita acontece no **Command Service** e toda leitura/consulta no **Query Service**.  
+As mudanças são propagadas por eventos no RabbitMQ e refletidas no frontend via SSE.
 
-## 🏗️ Arquitetura
+---
 
-```
-┌─────────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Frontend      │────▶│  Command S.  │────▶│  RabbitMQ   │
-│  (Client)       │     │  (port 4001) │     │             │
-│  (port 5173)    │     └──────┬───────┘     └──────┬──────┘
-└────────┬────────┘            │                    │
-         │              GraphQL mutations      domain_events
-         │                    │                    │
-         │                    ▼                    ▼
-         │            ┌──────────────┐     ┌──────────────┐
-         │            │  Query S.    │◀────│  RabbitMQ    │
-         │            │  (port 4002) │     │  (consumer)  │
-         │            └──────┬───────┘     └──────────────┘
-         │                   │
-         │            GraphQL queries + SSE
-         │                   │
-         ▼                   ▼
-┌─────────────────┐    ┌──────────────┐
-│ Kitchen Display │    │   Frontend   │
-│  (port 5174)    │    │  (real-time) │
-└─────────────────┘    └──────────────┘
+## Arquitetura
+
+```text
+Frontend Tablet ── GraphQL (mutations) ──▶ Command Service (4001)
+       ▲                                          │
+       │                                          │ publica eventos
+       │                                          ▼
+SSE (4002) ◀────────────────────────────── RabbitMQ (domain_events)
+       │                                          ▲
+       ▼                                          │ consome/projeta
+Query Service (4002) ── GraphQL (queries) ───────┘
+       ▲
+       └──────────── Kitchen Frontend (5174)
 ```
 
-### Pattern: CQRS (Command Query Responsibility Segregation)
+### Responsabilidades
 
-- **Command Service**: Responsável por todas as operações de escrita (mutations GraphQL)
-- **Query Service**: Responsável por consultas e notificações em tempo real (SSE + Subscriptions)
-- **Kitchen Display**: Interface da cozinha para gerenciar pedidos
+- **Command Service**
+  - Escrita de pedidos e mudança de status
+  - Publicação de eventos de domínio
+- **Query Service**
+  - Read model para consultas
+  - Projeção de eventos consumidos do RabbitMQ
+  - Endpoint SSE para atualização em tempo real
+- **Frontend Tablet**
+  - Sessão por cliente/mesa
+  - Cardápio, pedidos ativos e conta consolidada
+- **Kitchen Frontend**
+  - Gestão operacional da cozinha por coluna/status
+  - Sessão diária por data (filtro de calendário)
 
-### Technology Stack
+---
 
-| Camada | Tecnologia |
-|--------|------------|
-| Frontend Client | React + Vite + Ant Design + Apollo Client |
-| Frontend Kitchen | React + Vite + Ant Design + Apollo Client |
-| Backend | Node.js + TypeScript + Express |
-| API | GraphQL (graphql-yoga + Nexus) |
-| Database | PostgreSQL + Prisma (db push) |
-| Message Broker | RabbitMQ |
-| Real-time | Server-Sent Events (SSE) + GraphQL Subscriptions |
-| Testes Unitários | Vitest |
-| Testes E2E | Playwright |
+## Stack
 
-## 📁 Estrutura do Projeto
+- **Backend:** Node.js, TypeScript, Express, GraphQL Yoga, Prisma
+- **Mensageria:** RabbitMQ
+- **Banco:** PostgreSQL
+- **Frontend:** React + Vite + Ant Design + Apollo Client
+- **Tempo real:** SSE + refetch orientado a evento
+- **Testes/Lint:** Vitest, ESLint
 
-```
+---
+
+## Funcionalidades Implementadas
+
+### Tablet (Mesa)
+
+- Sessão iniciada por nome do cliente e mesa
+- Header contextual em todas as páginas: `Mesa X - Nome do cliente`
+- Cardápio com fluxo de observação opcional antes de confirmar pedido
+- Pedidos com status traduzidos e alinhados ao fluxo da cozinha
+- Conta com itens **consolidados** (nome + preço unitário), exibindo:
+  - Nome
+  - Preço unitário
+  - Quantidade
+  - Total
+- Fechamento de conta:
+  - Se não houve consumo: encerra sessão
+  - Se houve consumo: fluxo de pagamento
+- SSE ativo durante toda sessão:
+  - Atualiza pedidos/conta em background
+  - Exibe toast informativa de atualização por 3 segundos
+
+### Cozinha
+
+- Board com colunas:
+  - `PENDING`
+  - `PREPARING`
+  - `ON_THE_WAY`
+  - `DELIVERED`
+  - `CANCELLED`
+- Drag-and-drop entre colunas
+- Ação em lote para confirmar entrega na coluna `ON_THE_WAY`
+- Regra de domínio aplicada: `CANCELLED` é terminal (não volta)
+- Timer operacional com tooltip de tempos por etapa
+- Filtro por sessão diária via calendário
+- Paleta visual pastel com cards/status diferenciados
+
+---
+
+## Regras de Negócio Relevantes
+
+- Fluxo principal de status: `PENDING -> PREPARING -> ON_THE_WAY -> DELIVERED`
+- `CANCELLED` não retorna para outros estados
+- `DELIVERED` pode voltar para fluxo operacional se necessário
+- Conta consolida itens iguais; aba de pedidos mantém separação operacional
+
+---
+
+## Contrato GraphQL
+
+### Command Service (`:4001/graphql`)
+
+- `createOrder(tableId, items)`
+- `updateOrderStatus(orderId, status)`
+- `addOrderItem(orderId, item)`
+- `removeOrderItem(orderId, productId)`
+- `seedMenu`
+
+### Query Service (`:4002/graphql`)
+
+- `ordersByTable(tableId)`
+- `order(id)`
+- `menu(category)`
+
+### SSE (`:4002/sse/table/:tableId`)
+
+- Atualizações de status e itens para mesa específica e canal `all` (cozinha)
+
+---
+
+## Estrutura do Projeto
+
+```text
 restaurant-order-queue/
-├── command-service/           # Microsserviço de comandos (escrita)
-│   ├── prisma/               # Schema do banco (write model)
-│   └── src/
-│       ├── graphql/          # Mutations + Types
-│       ├── domain/           # Events + Value Objects + Tests
-│       └── infrastructure/   # RabbitMQ publisher
-│
-├── query-service/            # Microsserviço de consultas (leitura)
-│   ├── prisma/               # Schema do banco (read model)
-│   └── src/
-│       ├── graphql/          # Queries + Subscriptions
-│       └── infrastructure/   # SSE + RabbitMQ consumer
-│
-├── frontend/                 # Aplicação do cliente (tablet)
-│   └── src/
-│       ├── apollo/           # Client GraphQL
-│       ├── hooks/            # Custom hooks
-│       ├── pages/            # MenuPage, OrderStatusPage
-│       └── stores/           # Zustand stores
-│
-├── kitchen-frontend/         # Display da cozinha
-│   └── src/
-│       ├── hooks/            # Kitchen hooks
-│       └── services/         # GraphQL queries
-│
-├── integration-tests/        # Testes de integração
-├── e2e-tests/                # Testes E2E (Playwright)
-│
-├── docker-compose.yml        # Orquestração de containers
-├── README.md                 # Este arquivo
-├── ROADMAP.md                # Histórico de decisões
-└── AGENTS.md                 # Configuração do OpenCode
+├── command-service/
+├── query-service/
+├── frontend/
+├── kitchen-frontend/
+├── integration-tests/
+├── e2e-tests/
+├── docker-compose.yml
+├── README.md
+└── ROADMAP.md
 ```
 
-## 🛠️ Como Executar
+---
 
-### Pré-requisitos
+## Variáveis de Ambiente
 
-- Node.js 20+
-- Docker e Docker Compose
-- PostgreSQL (via Docker)
-- RabbitMQ (via Docker)
+### command-service/.env
 
-### Opção 1: Apenas Banco de Dados + RabbitMQ (desenvolvimento local)
-
-```bash
-# Iniciar apenas PostgreSQL e RabbitMQ
-docker-compose up db rabbitmq
-
-# Para os containers
-docker-compose stop
-```
-
-### Opção 2: Desenvolvimento Completo
-
-```bash
-# 1. Clone o projeto e instale dependências
-cd command-service && npm install && npx prisma generate
-cd ../query-service && npm install && npx prisma generate
-cd ../frontend && npm install
-cd ../kitchen-frontend && npm install
-
-# 2. Inicie o Docker com PostgreSQL e RabbitMQ
-docker-compose up -d
-
-# 3. Execute o Prisma DB Push (em cada serviço)
-cd command-service && npx prisma db push
-cd query-service && npx prisma db push
-
-# 4. Seed do menu (GraphQL Playground no Query Service)
-mutation { seedMenu }
-
-# 5. Inicie os serviços (em terminais separados)
-# Terminal 1 - Command Service
-cd command-service && npm run dev
-
-# Terminal 2 - Query Service
-cd query-service && npm run dev
-
-# Terminal 3 - Frontend Cliente
-cd frontend && npm run dev
-
-# Terminal 4 - Frontend Cozinha
-cd kitchen-frontend && npm run dev
-```
-
-### Variáveis de Ambiente
-
-Cada projeto possui `.env.example` e `.env` configurados:
-
-```bash
-# command-service/.env
+```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/restaurant_order"
 RABBITMQ_URL="amqp://guest:guest@localhost:5672"
 CORS_ORIGIN="http://localhost:5173,http://localhost:5174"
 PORT=4001
+```
 
-# query-service/.env
+### query-service/.env
+
+```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/restaurant_order"
 RABBITMQ_URL="amqp://guest:guest@localhost:5672"
+RABBITMQ_QUEUE_NAME="query_service_order_projection"
 CORS_ORIGIN="http://localhost:5173,http://localhost:5174"
 PORT=4002
+```
 
-# frontend/.env
+### frontend/.env
+
+```env
 VITE_API_URL="http://localhost:4002"
 VITE_COMMAND_API_URL="http://localhost:4001"
+```
 
-# kitchen-frontend/.env
+### kitchen-frontend/.env
+
+```env
 VITE_API_URL="http://localhost:4002"
+VITE_COMMAND_API_URL="http://localhost:4001"
 ```
 
-### Auto-detecção de Portas
+---
 
-Os serviços detectam automaticamente se a porta padrão está em uso e tentam a próxima:
-- Command Service: tenta 4001 → 4010
-- Query Service: tenta 4002 (mas usa range 4001-4010)
+## Segurança de Configuração (.env)
 
-### Opção 3: Produção (Docker)
+- Arquivos `.env` locais **não são versionados** (protegidos no `.gitignore` do repositório).
+- Apenas arquivos `.env.example` devem ser commitados, sem segredos reais.
+- Antes de abrir PR/push, revise se nenhum `.env` entrou no stage.
+- Se algum segredo real for exposto por engano, rotacione imediatamente as credenciais.
+
+Checklist rápido:
 
 ```bash
-# Build e iniciar todos os serviços
-docker-compose up --build
+# não deve retornar arquivos .env versionados
+git ls-files */.env
+
+# revisar alterações staged antes de commit
+git diff --staged
 ```
 
-## 📡 API GraphQL
+---
 
-### Command Service (port 4001, auto-incrementa 4001-4010)
-
-```graphql
-# Criar pedido
-mutation CreateOrder($tableId: ID!, $items: [OrderItemInput!]!) {
-  createOrder(tableId: $tableId, items: $items) {
-    id
-    status
-    total
-  }
-}
-
-# Atualizar status
-mutation UpdateOrderStatus($orderId: ID!, $status: String!) {
-  updateOrderStatus(orderId: $orderId, status: $status) {
-    id
-    status
-  }
-}
-
-# Adicionar item
-mutation AddOrderItem($orderId: ID!, $item: OrderItemInput!) {
-  addOrderItem(orderId: $orderId, item: $item) {
-    id
-    total
-  }
-}
-
-# Remover item
-mutation RemoveOrderItem($orderId: ID!, $productId: String!) {
-  removeOrderItem(orderId: $orderId, productId: $productId) {
-    id
-  }
-}
-```
-
-### Query Service (port 4002, auto-incrementa)
-
-```graphql
-# Buscar pedidos por mesa
-query GetOrdersByTable($tableId: String!) {
-  ordersByTable(tableId: $tableId) {
-    id
-    status
-    total
-    items
-  }
-}
-
-# Buscar todos os pedidos (cozinha)
-query GetAllOrders {
-  ordersByTable(tableId: "all") {
-    id
-    tableId
-    status
-    items
-  }
-}
-
-# Cardápio
-query GetMenu($category: String) {
-  menu(category: $category) {
-    id
-    name
-    price
-    category
-  }
-}
-
-# Subscription (tempo real)
-subscription OnOrderUpdated($tableId: String!) {
-  orderUpdated(tableId: $tableId) {
-    id
-    status
-    total
-  }
-}
-```
-
-### SSE Endpoint
-
-```javascript
-// Frontend subscreve para atualizações em tempo real
-const es = new EventSource('http://localhost:4002/sse/table/table-1');
-es.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  // { type: 'ORDER_STATUS_CHANGED', payload: {...} }
-};
-
-// Cozinha recebe todos os pedidos
-const es = new EventSource('http://localhost:4002/sse/table/all');
-```
-
-## 🎯 Fluxo de Dados
-
-1. **Cliente faz pedido** → Command Service (GraphQL Mutation)
-2. **Command Service persiste** → PostgreSQL (write model)
-3. **Command Service emite evento** → RabbitMQ (domain_events)
-4. **Query Service consome evento** → PostgreSQL (read model)
-5. **Query Service notifica** → SSE + GraphQL Subscription
-6. **Frontend/Kitchen recebe** → Atualização em tempo real
-7. **Cozinha atualiza status** → Command Service → RabbitMQ → Query Service → Cliente
-
-## 📝 Decisões de Arquitetura
-
-- **CQRS**: Separação clara entre operações de leitura e escrita
-- **Microsserviços**: Command, Query e 2 Frontends separados
-- **Prisma com db push**: Sem migrations, schema sempre sincronizado
-- **GraphQL**: API unificada para frontend
-- **SSE**: Para notificações em tempo real (mais leve que WebSockets para este caso)
-- **RabbitMQ**: Message broker para comunicação entre serviços
-- **Nexus**: Schema definition em código TypeScript
-
-## 🧪 Testes e Qualidade de Código
+## Qualidade e Verificação
 
 ```bash
-# Lint - Verificar erros de código
 cd command-service && npm run lint
 cd query-service && npm run lint
 cd frontend && npm run lint
 cd kitchen-frontend && npm run lint
-
-# Lint - Corrigir automaticamente
-cd command-service && npm run lint:fix
-
-# Testes Unitários
-cd command-service && npm run test
-
-# Testes de Integração (serviços devem estar rodando)
-cd integration-tests && npm install && npm test
-
-# Testes E2E (serviços devem estar rodando)
-cd e2e-tests && npm install && npx playwright install chromium && npm test
 ```
 
-### Regras ESLint
+### Testes de Backend
 
-- `@typescript-eslint/no-unused-vars`: Error
-- `@typescript-eslint/no-explicit-any`: Off (facilita desenvolvimento)
-- `no-console`: Warning
-- Importe extensions desabilitados para compatibilidade com TypeScript
+```bash
+# Command Service (unit + integridade de commands)
+cd command-service && npm test
 
-## 📄 Licença
-
-MIT
-
-## 👨‍💻 Autor
-
-[Seu Nome]
+# Query Service (integridade de SSE manager)
+cd query-service && npm test
+```
 
 ---
 
-*Projeto desenvolvido com vibe coding 💻*
+## Como Iniciar o Projeto
+
+### 1) Infraestrutura
+
+```bash
+docker-compose up -d
+```
+
+### 2) Instalar dependências
+
+```bash
+cd command-service && npm install && npx prisma generate
+cd ../query-service && npm install && npx prisma generate
+cd ../frontend && npm install
+cd ../kitchen-frontend && npm install
+```
+
+### 3) Aplicar schema no banco
+
+```bash
+cd command-service && npx prisma db push
+cd ../query-service && npx prisma db push
+```
+
+### 4) Subir serviços (terminais separados)
+
+```bash
+# Terminal 1
+cd command-service && npm run dev
+
+# Terminal 2
+cd query-service && npm run dev
+
+# Terminal 3
+cd frontend && npm run dev
+
+# Terminal 4
+cd kitchen-frontend && npm run dev
+```
+
+### 5) Acessos
+
+- Tablet: `http://localhost:5173`
+- Cozinha: `http://localhost:5174`
+- Command GraphQL: `http://localhost:4001/graphql`
+- Query GraphQL: `http://localhost:4002/graphql`

@@ -39,7 +39,7 @@ body {
   animation: pulse-border 2s infinite;
 }
 
-.status-ready {
+.status-on-the-way {
   border-left: 4px solid #00d9ff;
 }
 

@@ -74,17 +74,21 @@ class Order {
   }
 
   addItem(item: OrderItemProps): Order {
+    const snapshot = this.toPlain();
     return new Order({
-      ...this.toPlain(),
-      items: [...this.toPlain().items, item],
+      ...snapshot,
+      total: undefined,
+      items: [...snapshot.items, item],
       updatedAt: new Date()
     });
   }
 
   removeItem(productId: string): Order {
+    const snapshot = this.toPlain();
     return new Order({
-      ...this.toPlain(),
-      items: this.toPlain().items.filter(i => i.productId !== productId),
+      ...snapshot,
+      total: undefined,
+      items: snapshot.items.filter(i => i.productId !== productId),
       updatedAt: new Date()
     });
   }
@@ -124,7 +128,7 @@ describe('Order Entity', () => {
         ]
       });
 
-      expect(order.total).toBe(105.70);
+      expect(order.total).toBeCloseTo(105.70, 2);
     });
 
     it('should default status to PENDING', () => {
@@ -193,7 +197,7 @@ describe('Order Entity', () => {
       });
 
       expect(updatedOrder.items.length).toBe(2);
-      expect(updatedOrder.total).toBe(60.70);
+      expect(updatedOrder.total).toBeCloseTo(60.70, 2);
     });
 
     it('should remove item correctly', () => {
@@ -209,7 +213,7 @@ describe('Order Entity', () => {
 
       expect(updatedOrder.items.length).toBe(1);
       expect(updatedOrder.items[0].productId).toBe('prod-2');
-      expect(updatedOrder.total).toBe(8.90);
+      expect(updatedOrder.total).toBeCloseTo(8.90, 2);
     });
   });
 

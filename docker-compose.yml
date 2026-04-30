@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Banco de dados PostgreSQL
   db:
@@ -18,6 +16,19 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    profiles:
+      - infra
+
+  # Cache Redis
+  redis:
+    image: redis:7-alpine
+    container_name: restaurant-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    profiles:
+      - infra
 
   # Message Broker RabbitMQ
   rabbitmq:
@@ -36,6 +47,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    profiles:
+      - infra
 
   # Command Service (GraphQL mutations)
   command-service:
@@ -49,14 +62,8 @@ services:
       NODE_ENV: development
     ports:
       - "4001:4001"
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    volumes:
-      - ./command-service:/app
-      - /app/node_modules
+    profiles:
+      - app
 
   # Query Service (GraphQL queries + SSE)
   query-service:
@@ -70,14 +77,8 @@ services:
       NODE_ENV: development
     ports:
       - "4002:4002"
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    volumes:
-      - ./query-service:/app
-      - /app/node_modules
+    profiles:
+      - app
 
   # Frontend (React + Vite)
   frontend:
@@ -88,13 +89,9 @@ services:
     environment:
       VITE_API_URL: http://localhost:4002
     ports:
-      - "5173:5173"
-    depends_on:
-      - command-service
-      - query-service
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "6173:6173"
+    profiles:
+      - app
 
   # Kitchen Display (Cozinha)
   kitchen-frontend:
@@ -105,17 +102,14 @@ services:
     environment:
       VITE_API_URL: http://localhost:4002
     ports:
-      - "5174:5174"
-    depends_on:
-      - command-service
-      - query-service
-    volumes:
-      - ./kitchen-frontend:/app
-      - /app/node_modules
+      - "6174:6174"
+    profiles:
+      - app
 
 volumes:
   postgres_data:
   rabbitmq_data:
+  redis_data:
 
 networks:
   default:

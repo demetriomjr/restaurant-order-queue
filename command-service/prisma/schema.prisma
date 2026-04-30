@@ -7,39 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum OrderStatus {
-  PENDING
-  CONFIRMED
-  PREPARING
-  READY
-  DELIVERED
-  COMPLETED
-}
-
 model Order {
-  id        String      @id @default(uuid())
-  tableId   String
-  status    OrderStatus @default(PENDING)
-  total     Float       @default(0)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  items     OrderItem[]
+  id                String    @id @default(uuid())
+  tableId           String
+  status            String    @default("PENDING")
+  total             Float     @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  pendingStartedAt  DateTime?
+  preparingStartedAt DateTime?
+  onTheWayStartedAt DateTime?
+  items             Json
 
   @@index([tableId])
   @@index([status])
-}
-
-model OrderItem {
-  id          String  @id @default(uuid())
-  orderId     String
-  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String
-  productName String
-  quantity    Int
-  unitPrice   Float
-  notes       String?
-
-  @@index([orderId])
 }
 
 model Product {

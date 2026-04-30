@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_MENU, GET_ACTIVE_ORDERS, CREATE_ORDER, ORDER_UPDATED_SUBSCRIPTION } from '../apollo/queries';
+import { GET_MENU, GET_ORDERS_BY_TABLE, CREATE_ORDER } from '../apollo/queries';
+import { commandClient } from '../apollo/client';
 
 interface MenuItem {
   id: string;
@@ -16,6 +17,7 @@ interface CartItem {
   productName: string;
   quantity: number;
   unitPrice: number;
+  notes?: string;
 }
 
 export function useMenu() {
@@ -30,49 +32,20 @@ export function useMenu() {
 }
 
 export function useActiveOrders(tableId: string) {
-  const { data, loading, error, subscribeToMore } = useQuery(GET_ACTIVE_ORDERS, {
+  const { data, loading, refetch } = useQuery(GET_ORDERS_BY_TABLE, {
     variables: { tableId },
     fetchPolicy: 'cache-and-network'
   });
 
-  useEffect(() => {
-    if (!subscribeToMore) return;
-
-    const unsubscribe = subscribeToMore({
-      document: ORDER_UPDATED_SUBSCRIPTION,
-      variables: { tableId },
-      updateQuery: (prev, { subscriptionData }) => {
-        if (!subscriptionData.data) return prev;
-        
-        const updatedOrder = subscriptionData.data.orderUpdated;
-        
-        const existingOrders = prev.activeOrdersByTable || [];
-        const existingIndex = existingOrders.findIndex(
-          (o: any) => o.id === updatedOrder.id
-        );
-
-        if (existingIndex >= 0) {
-          const newOrders = [...existingOrders];
-          newOrders[existingIndex] = updatedOrder;
-          return { activeOrdersByTable: newOrders };
-        } else {
-          return { activeOrdersByTable: [updatedOrder, ...existingOrders] };
-        }
-      }
-    });
-
-    return () => unsubscribe?.();
-  }, [subscribeToMore, tableId]);
-
   return {
-    orders: data?.activeOrdersByTable || [],
+    orders: data?.ordersByTable || [],
     loading,
-    error
+    refetch
   };
 }
 
 export function useCreateOrder() {
-  const [mutation, { loading }] = useMutation(CREATE_ORDER);
+  const [mutation, { loading }] = useMutation(CREATE_ORDER, { client: commandClient });
   
   const createOrder = useCallback(async (tableId: string, items: CartItem[]) => {
     const result = await mutation({
@@ -82,7 +55,8 @@ export function useCreateOrder() {
           productId: item.productId,
           productName: item.productName,
           quantity: item.quantity,
-          unitPrice: item.unitPrice
+          unitPrice: item.unitPrice,
+          notes: item.notes
         }))
       }
     });
@@ -92,27 +66,37 @@ export function useCreateOrder() {
   return { createOrder, loading };
 }
 
-export function useSSEConnection(tableId: string) {
+export function useSSEConnection(tableId: string, onEvent?: (event: { type?: string; payload?: Record<string, unknown> }) => void) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const eventSource = new EventSource(`http://localhost:4002/sse/table/${tableId}`);
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4002';
+    const eventSource = new EventSource(`${apiUrl}/sse/table/${tableId}`);
     
     eventSource.onopen = () => {
-      console.log('SSE Connected');
+      console.log(`[SSE] TABLET connected for table "${tableId}"`);
       setConnected(true);
     };
 
+    eventSource.onmessage = (event) => {
+      console.log('[SSE] TABLET received:', event.data);
+      try {
+        const parsed = JSON.parse(event.data);
+        onEvent?.(parsed);
+      } catch {
+        onEvent?.({});
+      }
+    };
+
     eventSource.onerror = () => {
-      console.log('SSE Error');
+      console.log('[SSE] TABLET error');
       setConnected(false);
-      eventSource.close();
     };
 
     return () => {
       eventSource.close();
     };
-  }, [tableId]);
+  }, [tableId, onEvent]);
 
   return { connected };
 }

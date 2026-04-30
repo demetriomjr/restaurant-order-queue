@@ -20,20 +20,14 @@ export const GET_ORDERS_BY_TABLE = gql`
       tableId
       status
       total
-      items
-      updatedAt
-    }
-  }
-`;
-
-export const GET_ACTIVE_ORDERS = gql`
-  query GetActiveOrdersByTable($tableId: String!) {
-    activeOrdersByTable(tableId: $tableId) {
-      id
-      tableId
-      status
-      total
-      items
+      items {
+        productId
+        productName
+        quantity
+        unitPrice
+        notes
+      }
+      createdAt
       updatedAt
     }
   }
@@ -46,25 +40,32 @@ export const GET_ORDER = gql`
       tableId
       status
       total
-      items
+      items {
+        productId
+        productName
+        quantity
+        unitPrice
+        notes
+      }
+      createdAt
       updatedAt
     }
   }
 `;
 
 export const CREATE_ORDER = gql`
-  mutation CreateOrder($tableId: ID!, $items: [OrderItemInput!]!) {
+  mutation CreateOrder($tableId: String!, $items: [OrderItemInput!]!) {
     createOrder(tableId: $tableId, items: $items) {
       id
       tableId
       status
       total
       items {
-        id
         productId
         productName
         quantity
         unitPrice
+        notes
       }
     }
   }
@@ -104,18 +105,5 @@ export const REMOVE_ORDER_ITEM = gql`
 export const SEED_MENU = gql`
   mutation SeedMenu {
     seedMenu
-  }
-`;
-
-export const ORDER_UPDATED_SUBSCRIPTION = gql`
-  subscription OnOrderUpdated($tableId: String!) {
-    orderUpdated(tableId: $tableId) {
-      id
-      tableId
-      status
-      total
-      items
-      updatedAt
-    }
   }
 `;

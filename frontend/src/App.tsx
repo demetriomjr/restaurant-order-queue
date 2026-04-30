@@ -1,96 +1,86 @@
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Layout, Menu, Typography, Space } from 'antd';
-import { AppstoreOutlined, UnorderedListOutlined, CoffeeOutlined } from '@ant-design/icons';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ConfigProvider, message } from 'antd';
+import { useState } from 'react';
 import MenuPage from './pages/MenuPage';
 import OrderStatusPage from './pages/OrderStatusPage';
+import AccountPage from './pages/AccountPage';
+import SessionScreen from './pages/SessionScreen';
+import BottomNav from './components/BottomNav';
+import { useSSEConnection } from './hooks/useOrder';
+import { apolloClient } from './apollo/client';
+import { GET_ORDERS_BY_TABLE } from './apollo/queries';
 
-const { Header, Content, Footer } = Layout;
-const { Text } = Typography;
+interface Session {
+  tableNumber: number;
+  customerName: string;
+}
 
-function AppLayout() {
-  const location = useLocation();
-
-  return (
-    <Layout style={{ minHeight: '100vh', background: 'transparent' }}>
-      <Header style={{ 
-        background: 'rgba(255, 255, 255, 0.9)',
-        backdropFilter: 'blur(10px)',
-        borderBottom: '1px solid #E8E2DC',
-        padding: '0 32px',
-        height: 72,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100
-      }}>
-        <Space size={12}>
-          <div style={{
-            width: 44,
-            height: 44,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(184, 134, 11, 0.3)'
-          }}>
-            <CoffeeOutlined style={{ fontSize: 22, color: 'white' }} />
-          </div>
-          <div>
-            <Text strong style={{ fontSize: 18, fontFamily: "'Playfair Display', serif", color: '#2C1810' }}>
-              Restaurante Premium
-            </Text>
-            <br />
-            <Text type="secondary" style={{ fontSize: 12 }}>Sistema de Pedidos</Text>
-          </div>
-        </Space>
-
-        <Menu 
-          mode="horizontal" 
-          selectedKeys={[location.pathname]}
-          style={{ border: 'none', background: 'transparent', minWidth: 300 }}
-          items={[
-            {
-              key: '/',
-              icon: <AppstoreOutlined />,
-              label: <Link to="/">Cardápio</Link>
-            },
-            {
-              key: '/status',
-              icon: <UnorderedListOutlined />,
-              label: <Link to="/status">Meus Pedidos</Link>
-            }
-          ]}
-        />
-      </Header>
-
-      <Content style={{ background: 'transparent' }}>
-        <Routes>
-          <Route path="/" element={<MenuPage />} />
-          <Route path="/status" element={<OrderStatusPage />} />
-        </Routes>
-      </Content>
-
-      <Footer style={{ 
-        textAlign: 'center', 
-        background: 'transparent',
-        padding: '24px 32px',
-        borderTop: '1px solid #E8E2DC'
-      }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          Restaurante Premium © 2026 • Sistema de Pedidos em Tempo Real
-        </Text>
-      </Footer>
-    </Layout>
-  );
+function SSEConnector({ tableId }: { tableId: string }) {
+  useSSEConnection(tableId, (event) => {
+    if (event.type && event.type !== 'CONNECTED') {
+      void message.info({
+        content: 'Atualização recebida em tempo real',
+        duration: 3
+      });
+    }
+    void apolloClient.refetchQueries({
+      include: [GET_ORDERS_BY_TABLE]
+    });
+  });
+  return null;
 }
 
 export default function Root() {
+  const [session, setSession] = useState<Session | null>(null);
+
+  const handleJoin = (tableNumber: number, customerName: string) => {
+    const newSession = { tableNumber, customerName };
+    setSession(newSession);
+  };
+
+  const handleLeave = () => {
+    setSession(null);
+  };
+
   return (
-    <BrowserRouter>
-      <AppLayout />
-    </BrowserRouter>
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: '#FF6F00',
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+          borderRadius: 12,
+        },
+      }}
+    >
+      <BrowserRouter>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          height: '100vh',
+          overflow: 'hidden',
+        }}>
+          {!session ? (
+            <SessionScreen onJoin={handleJoin} />
+          ) : (
+            <>
+              <div style={{ 
+                flex: 1,
+                overflow: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+              }}>
+                <Routes>
+                  <Route path="/" element={<MenuPage tableNumber={session.tableNumber} customerName={session.customerName} />} />
+                  <Route path="/orders" element={<OrderStatusPage tableNumber={session.tableNumber} customerName={session.customerName} />} />
+                  <Route path="/account" element={<AccountPage tableNumber={session.tableNumber} customerName={session.customerName} onLeave={handleLeave} />} />
+                </Routes>
+                {session && <SSEConnector tableId={`table-${session.tableNumber}`} />}
+              </div>
+              <BottomNav />
+            </>
+          )}
+        </div>
+      </BrowserRouter>
+    </ConfigProvider>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_PENDING_ORDERS, UPDATE_ORDER_STATUS, ORDER_UPDATED_SUBSCRIPTION } from '../services/queries';
+import { commandClient } from '../services/clients';
 
 interface OrderItem {
   productId: string;
@@ -18,13 +19,32 @@ interface Order {
   items: OrderItem[];
   updatedAt: string;
   createdAt: string;
+  pendingStartedAt?: string | null;
+  preparingStartedAt?: string | null;
+  onTheWayStartedAt?: string | null;
 }
 
 export function useKitchenOrders() {
-  const { data, loading, error, subscribeToMore } = useQuery(GET_PENDING_ORDERS, {
+  const { data, loading, error, refetch, subscribeToMore } = useQuery(GET_PENDING_ORDERS, {
     pollInterval: 5000,
     fetchPolicy: 'cache-and-network'
   });
+  
+  const { connected } = useSSE();
+  
+  // Quando conecta no SSE OU quando inicia, busca pedidos do banco
+  useEffect(() => {
+    console.log('[Kitchen] Fetching orders from database...');
+    refetch();
+  }, [refetch]); // Executa ao iniciar e quando refetch mudar
+
+  useEffect(() => {
+    // Quando SSE conecta, refetch para garantir dados frescos
+    if (connected) {
+      console.log('[Kitchen] SSE connected, refetching...');
+      refetch();
+    }
+  }, [connected, refetch]);
 
   useEffect(() => {
     if (!subscribeToMore) return;
@@ -37,7 +57,7 @@ export function useKitchenOrders() {
         const updatedOrder = subscriptionData.data.orderUpdated;
         const existingOrders = prev.ordersByTable || [];
         
-        if (updatedOrder.status === 'COMPLETED' || updatedOrder.status === 'DELIVERED') {
+        if (updatedOrder.status === 'COMPLETED') {
           return {
             ordersByTable: existingOrders.filter((o: Order) => o.id !== updatedOrder.id)
           };
@@ -61,12 +81,14 @@ export function useKitchenOrders() {
   return {
     orders: (data?.ordersByTable || []) as Order[],
     loading,
-    error
+    error,
+    refetch,
+    connected
   };
 }
 
 export function useUpdateOrderStatus() {
-  const [mutation, { loading }] = useMutation(UPDATE_ORDER_STATUS);
+  const [mutation, { loading }] = useMutation(UPDATE_ORDER_STATUS, { client: commandClient });
   
   const updateStatus = useCallback(async (orderId: string, status: string) => {
     await mutation({
@@ -81,14 +103,23 @@ export function useSSE() {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const eventSource = new EventSource('http://localhost:4002/sse/table/all');
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4002';
+    const url = `${apiUrl}/sse/table/all`;
+    console.log('Kitchen: Connecting to SSE at', url);
+    
+    const eventSource = new EventSource(url);
     
     eventSource.onopen = () => {
-      console.log('Kitchen SSE Connected');
+      console.log('Kitchen SSE Connected to', url);
       setConnected(true);
     };
 
-    eventSource.onerror = () => {
+    eventSource.onmessage = (event) => {
+      console.log('Kitchen SSE message:', event.data);
+    };
+
+    eventSource.onerror = (error) => {
+      console.log('Kitchen SSE Error:', error);
       setConnected(false);
     };
 

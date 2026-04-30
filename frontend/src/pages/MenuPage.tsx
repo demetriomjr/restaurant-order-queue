@@ -1,10 +1,11 @@
-import { Badge, Card, Col, Row, Typography, Button, InputNumber, Space, message, List, Tag, Divider, Empty } from 'antd';
-import { ShoppingCartOutlined, CoffeeOutlined, FireOutlined, GlobalOutlined } from '@ant-design/icons';
-import { useMenu, useActiveOrders, useCreateOrder } from '../hooks/useOrder';
-import { useCartStore } from '../stores/cartStore';
 import { useState, useMemo } from 'react';
+import { Card, Row, Col, Typography, Button, message, Empty, Badge, Modal, Input } from 'antd';
+import { PlusOutlined, MinusOutlined, CheckCircleOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { useMenu, useCreateOrder } from '../hooks/useOrder';
+import { PageHeader } from '../components/PageHeader';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
+const { TextArea } = Input;
 
 interface MenuItem {
   id: string;
@@ -12,131 +13,217 @@ interface MenuItem {
   description: string;
   category: string;
   price: number;
+  imageUrl?: string;
 }
 
-const categoryConfig: Record<string, { icon: any; color: string; gradient: string }> = {
-  'Pratos Principais': { icon: <GlobalOutlined />, color: '#B8860B', gradient: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)' },
-  'Entradas': { icon: <FireOutlined />, color: '#C62828', gradient: 'linear-gradient(135deg, #C62828 0%, #8E0000 100%)' },
-  'Saladas': { icon: <GlobalOutlined />, color: '#2E7D32', gradient: 'linear-gradient(135deg, #43A047 0%, #2E7D32 100%)' },
-  'Acompanhamentos': { icon: <GlobalOutlined />, color: '#F57C00', gradient: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)' },
-  'Bebidas Não Alcoólicas': { icon: <CoffeeOutlined />, color: '#1565C0', gradient: 'linear-gradient(135deg, #1976D2 0%, #1565C0 100%)' },
-  'Cervejas': { icon: <CoffeeOutlined />, color: '#F9A825', gradient: 'linear-gradient(135deg, #FBC02D 0%, #F9A825 100%)' },
-  'Vinhos': { icon: <CoffeeOutlined />, color: '#7B1FA2', gradient: 'linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%)' },
-  'Drinks': { icon: <CoffeeOutlined />, color: '#00838F', gradient: 'linear-gradient(135deg, #00ACC1 0%, #00838F 100%)' },
-  'Sobremesas': { icon: <GlobalOutlined />, color: '#E91E63', gradient: 'linear-gradient(135deg, #EC407A 0%, #E91E63 100%)' },
+const categoryColors: Record<string, string> = {
+  'Pratos Principais': '#E65100',
+  'Entradas': '#C62828',
+  'Saladas': '#2E7D32',
+  'Acompanhamentos': '#EF6C00',
+  'Bebidas': '#0277BD',
+  'Cervejas': '#F9A825',
+  'Vinhos': '#7B1FA2',
+  'Drinks': '#00838F',
+  'Sobremesas': '#D81B60',
 };
 
-function MenuCard({ item, onAdd }: { item: MenuItem; onAdd: (item: MenuItem) => void }) {
-  const config = categoryConfig[item.category] || categoryConfig['Pratos Principais'];
+const gradientBg = `
+  radial-gradient(ellipse at 20% 0%, rgba(255,138,0,0.12) 0%, transparent 50%),
+  radial-gradient(ellipse at 80% 100%, rgba(255,87,34,0.1) 0%, transparent 50%),
+  linear-gradient(180deg, #FFF8F0 0%, #FFF5EB 100%)
+`;
+
+function MenuItemCard({ item, quantity, onAdd, onChange }: { 
+  item: MenuItem; 
+  quantity: number; 
+  onAdd: () => void;
+  onChange: (qty: number) => void;
+}) {
+  const color = categoryColors[item.category] || '#E65100';
+  const qty = quantity || 1;
   
   return (
     <Card 
-      hoverable 
-      className="menu-card"
-      cover={
-        <div style={{ 
-          height: 140, 
-          background: config.gradient,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
+      hoverable
+      style={{ 
+        borderRadius: 14,
+        border: quantity > 0 ? `2px solid ${color}` : '1px solid #e8e8e8',
+        overflow: 'hidden',
+      }}
+      bodyStyle={{ padding: 0, display: 'flex', alignItems: 'stretch', minHeight: 140 }}
+    >
+      <div style={{ width: '45%', position: 'relative', alignSelf: 'stretch', background: '#1f1f1f' }}>
+        {item.imageUrl ? (
+          <img
+            src={item.imageUrl}
+            alt={item.name}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center center',
+              background: '#1f1f1f',
+            }}
+          />
+        ) : (
           <div style={{
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.3) 100%)'
-          }} />
-          <div style={{ 
-            color: 'white', 
-            fontSize: 48,
-            opacity: 0.3,
-            position: 'absolute'
+            inset: 0,
+            background: `linear-gradient(135deg, ${color}30 0%, rgba(31,31,31,0.92) 100%)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
-            {config.icon}
+            <Text strong style={{ color: '#fff', fontSize: 38, opacity: 0.45, textTransform: 'uppercase' }}>
+              {item.category.charAt(0)}
+            </Text>
           </div>
-          <div style={{ 
-            position: 'absolute',
-            bottom: 12,
-            left: 16,
-            color: 'white',
-            fontFamily: "'Playfair Display', serif",
-            fontWeight: 600,
-            fontSize: 14,
-            textTransform: 'uppercase',
-            letterSpacing: 1,
-            opacity: 0.9
-          }}>
-            {item.category}
-          </div>
-        </div>
-      }
-    >
-      <Card.Meta
-        title={
-          <Text strong style={{ fontSize: 16, fontFamily: "'Playfair Display', serif" }}>
+        )}
+        
+        {quantity > 0 && (
+          <Badge 
+            count={quantity} 
+            style={{ 
+              position: 'absolute', 
+              top: 6, 
+              right: 6, 
+              background: color,
+            }} 
+          />
+        )}
+      </div>
+      
+      <div style={{ width: '55%', padding: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div>
+          <Text strong style={{ fontSize: 19, display: 'block', lineHeight: 1.3 }}>
             {item.name}
           </Text>
-        }
-        description={
-          <Paragraph ellipsis={{ rows: 2 }} style={{ color: '#6B5B4F', marginBottom: 8, minHeight: 40 }}>
-            {item.description}
-          </Paragraph>
-        }
-      />
-      <div style={{ 
-        marginTop: 12, 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        paddingTop: 12,
-        borderTop: '1px solid #E8E2DC'
-      }}>
-        <Text strong style={{ fontSize: 20, color: '#B8860B', fontFamily: "'Playfair Display', serif" }}>
-          R$ {item.price.toFixed(2)}
-        </Text>
-        <Button 
-          type="primary" 
-          size="large"
-          onClick={() => onAdd(item)}
-          style={{ borderRadius: 8 }}
-        >
-          Adicionar
-        </Button>
+          <Text strong style={{ fontSize: 22, color, marginTop: 6, display: 'block' }}>
+            R$ {item.price.toFixed(2)}
+          </Text>
+        </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Button
+              size="small"
+              icon={<MinusOutlined />}
+              onClick={() => onChange(Math.max(1, qty - 1))}
+              style={{ width: 38, height: 38, fontSize: 18, borderRadius: 8 }}
+            />
+            <Text strong style={{ minWidth: 30, textAlign: 'center', fontSize: 22 }}>
+              {qty}
+            </Text>
+            <Button
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => onChange(Math.min(10, qty + 1))}
+              style={{ width: 38, height: 38, fontSize: 18, borderRadius: 8 }}
+            />
+          </div>
+          
+          <Button
+            type="primary"
+            size="middle"
+            icon={<CheckCircleOutlined style={{ fontSize: 28 }} />}
+            onClick={onAdd}
+            style={{ 
+              background: color, 
+              borderColor: color,
+              width: 60,
+              height: 60,
+              borderRadius: 10,
+            }}
+          />
+        </div>
       </div>
     </Card>
   );
 }
 
-function OrderStatusTag({ status }: { status: string }) {
-  const config: Record<string, { color: string; label: string }> = {
-    'PENDING': { color: 'orange', label: 'Pendente' },
-    'CONFIRMED': { color: 'blue', label: 'Confirmado' },
-    'PREPARING': { color: 'purple', label: 'Preparando' },
-    'READY': { color: 'cyan', label: 'Pronto' },
-    'DELIVERED': { color: 'green', label: 'Entregue' },
-    'COMPLETED': { color: 'default', label: 'Finalizado' },
-  };
-  
-  const { color, label } = config[status] || { color: 'default', label: status };
-  
-  return <Tag color={color} style={{ fontSize: 12, padding: '4px 12px' }}>{label}</Tag>;
+interface CategorySectionProps {
+  category: string;
+  items: MenuItem[];
+  quantities: Record<string, number>;
+  onQuantityChange: (productId: string, qty: number) => void;
+  onOrder: (item: MenuItem) => void;
 }
 
-export default function MenuPage() {
-  const [tableId] = useState('table-1');
-  const { menu, loading } = useMenu();
-  const { orders } = useActiveOrders(tableId);
-  const { createOrder, loading: creatingOrder } = useCreateOrder();
-  const { items, addItem, removeItem, updateQuantity, clear } = useCartStore();
-
-  const currentOrder = orders.find(o => 
-    ['PENDING', 'CONFIRMED', 'PREPARING', 'READY'].includes(o.status)
+function CategorySection({ category, items, quantities, onQuantityChange, onOrder }: CategorySectionProps) {
+  const color = categoryColors[category] || '#E65100';
+  
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ 
+        marginBottom: 12, 
+        padding: '12px 16px',
+        background: `${color}15`,
+        borderRadius: 12,
+        borderLeft: `4px solid ${color}`,
+      }}>
+        <Text strong style={{ fontSize: 18, color }}>{category}</Text>
+      </div>
+      <Row gutter={[10, 10]}>
+        {items.map(item => (
+          <Col xs={12} key={item.id}>
+            <MenuItemCard
+              item={item}
+              quantity={quantities[item.id] || 0}
+              onAdd={() => onOrder(item)}
+              onChange={(qty) => onQuantityChange(item.id, qty)}
+            />
+          </Col>
+        ))}
+      </Row>
+    </div>
   );
+}
+
+export default function MenuPage({ tableNumber, customerName }: { tableNumber: number; customerName: string }) {
+  const tableId = `table-${tableNumber}`;
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [pendingItem, setPendingItem] = useState<MenuItem | null>(null);
+  const [pendingQty, setPendingQty] = useState(1);
+  const { menu, loading } = useMenu();
+  const { createOrder } = useCreateOrder();
+
+  const handleQuantityChange = (productId: string, qty: number) => {
+    setQuantities(prev => ({ ...prev, [productId]: qty }));
+  };
+
+  const openNoteModal = (item: MenuItem) => {
+    const qty = quantities[item.id] || 1;
+    setPendingItem(item);
+    setPendingQty(qty);
+    setNoteText('');
+    setIsNoteModalOpen(true);
+  };
+
+  const submitOrder = async () => {
+    if (!pendingItem) return;
+    try {
+      await createOrder(tableId, [{
+        productId: pendingItem.id,
+        productName: pendingItem.name,
+        quantity: pendingQty,
+        unitPrice: pendingItem.price,
+        notes: noteText.trim() || undefined
+      }]);
+      message.success({ content: `${pendingQty}x ${pendingItem.name} pedido!`, duration: 1.5 });
+      setQuantities(prev => ({ ...prev, [pendingItem.id]: 1 }));
+      setIsNoteModalOpen(false);
+      setPendingItem(null);
+      setPendingQty(1);
+      setNoteText('');
+    } catch {
+      message.error('Erro ao fazer pedido');
+    }
+  };
 
   const groupedMenu = useMemo(() => {
     const groups: Record<string, MenuItem[]> = {};
@@ -147,232 +234,78 @@ export default function MenuPage() {
     return groups;
   }, [menu]);
 
-  const cartTotal = useMemo(() => 
-    items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0), 
-  [items]);
-
-  const handleAddToCart = (item: MenuItem) => {
-    addItem({
-      productId: item.id,
-      productName: item.name,
-      quantity: 1,
-      unitPrice: item.price
-    });
-    message.success({
-      content: `${item.name} adicionado`,
-      duration: 1,
-      style: { marginTop: 60 }
-    });
-  };
-
-  const handleSendOrder = async () => {
-    if (items.length === 0) {
-      message.warning('Adicione itens ao pedido');
-      return;
-    }
-
-    try {
-      await createOrder(tableId, items);
-      clear();
-      message.success({
-        content: 'Pedido enviado com sucesso!',
-        duration: 2,
-        style: { marginTop: 60 }
-      });
-    } catch (error) {
-      message.error('Erro ao enviar pedido');
-    }
-  };
-
   return (
-    <div style={{ padding: '24px 32px', minHeight: '100vh' }}>
-      <Row gutter={32}>
-        <Col xs={24} lg={16}>
-          <div style={{ marginBottom: 32 }}>
-            <Space align="center" size={16}>
-              <div style={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 16px rgba(184, 134, 11, 0.3)'
-              }}>
-                <GlobalOutlined style={{ fontSize: 28, color: 'white' }} />
-              </div>
-              <div>
-                <Title level={2} style={{ margin: 0, fontFamily: "'Playfair Display', serif" }}>
-                  Cardápio
-                </Title>
-                <Text type="secondary">Mesa {tableId.split('-')[1]} • Restaurante Premium</Text>
-              </div>
-            </Space>
-          </div>
+    <div style={{ 
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: gradientBg,
+    }}>
+      <PageHeader 
+        title="Cardápio" 
+        icon={<AppstoreOutlined />} 
+        color="linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%)"
+        tableNumber={tableNumber}
+        customerName={customerName}
+      />
 
-          {loading ? (
-            <Card>
-              <div className="loading-pulse" style={{ textAlign: 'center', padding: 40 }}>
-                <Text>Carregando cardápio...</Text>
-              </div>
-            </Card>
-          ) : (
-            Object.entries(groupedMenu).map(([category, items]) => (
-              <div key={category} style={{ marginBottom: 32 }} className="fade-in-up">
-                <Space align="center" size={12} style={{ marginBottom: 16 }}>
-                  <Text strong style={{ fontSize: 22, fontFamily: "'Playfair Display', serif", color: '#2C1810' }}>
-                    {category}
-                  </Text>
-                  <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, #E8E2DC 0%, transparent 100%)' }} />
-                  <Text type="secondary">{items.length} itens</Text>
-                </Space>
-                <Row gutter={[16, 16]}>
-                  {items.map((item, idx) => (
-                    <Col xs={24} sm={12} xl={8} key={item.id} style={{ animationDelay: `${idx * 50}ms` }}>
-                      <MenuCard item={item} onAdd={handleAddToCart} />
-                    </Col>
-                  ))}
-                </Row>
-              </div>
-            ))
-          )}
-        </Col>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+        {loading ? (
+          <Empty description="Carregando..." />
+        ) : (
+          Object.entries(groupedMenu).map(([category, items]) => (
+            <CategorySection
+              key={category}
+              category={category}
+              items={items}
+              quantities={quantities}
+              onQuantityChange={handleQuantityChange}
+              onOrder={openNoteModal}
+            />
+          ))
+        )}
+      </div>
 
-        <Col xs={24} lg={8}>
-          <div style={{ position: 'sticky', top: 24 }}>
-            <Card 
-              style={{ 
-                borderRadius: 16,
-                boxShadow: '0 8px 32px rgba(44, 24, 16, 0.12)',
-                overflow: 'hidden'
-              }}
-              bodyStyle={{ padding: 0 }}
-            >
-              <div style={{
-                background: 'linear-gradient(135deg, #2C1810 0%, #4A3428 100%)',
-                padding: '20px 24px',
-                color: 'white'
-              }}>
-                <Space>
-                  <ShoppingCartOutlined style={{ fontSize: 24 }} />
-                  <Title level={4} style={{ color: 'white', margin: 0, fontFamily: "'Playfair Display', serif" }}>
-                    Seu Pedido
-                  </Title>
-                  {items.length > 0 && (
-                    <Badge count={items.length} style={{ background: '#B8860B' }} />
-                  )}
-                </Space>
-              </div>
-
-              <div style={{ padding: 20, minHeight: 200 }}>
-                {items.length === 0 ? (
-                  <Empty 
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={
-                      <Text type="secondary">Seu carrinho está vazio</Text>
-                    }
-                  />
-                ) : (
-                  <List
-                    dataSource={items}
-                    renderItem={(item) => (
-                      <List.Item
-                        key={item.productId}
-                        style={{ padding: '12px 0', borderBottom: '1px solid #E8E2DC' }}
-                        actions={[
-                          <Button 
-                            key="remove"
-                            type="text" 
-                            danger 
-                            size="small"
-                            icon={<span style={{ fontSize: 14 }}>✕</span>} 
-                            onClick={() => removeItem(item.productId)}
-                          />
-                        ]}
-                      >
-                        <List.Item.Meta
-                          title={
-                            <Text strong style={{ fontSize: 14 }}>{item.productName}</Text>
-                          }
-                          description={
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              R$ {item.unitPrice.toFixed(2)} cada
-                            </Text>
-                          }
-                        />
-                        <InputNumber
-                          size="small"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(val) => updateQuantity(item.productId, val || 1)}
-                          style={{ width: 60 }}
-                        />
-                      </List.Item>
-                    )}
-                  />
-                )}
-              </div>
-
-              {items.length > 0 && (
-                <>
-                  <Divider style={{ margin: 0 }} />
-                  <div style={{ padding: '16px 20px', background: '#FAF8F5' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <Text strong style={{ fontSize: 16 }}>Total</Text>
-                      <Title level={4} style={{ margin: 0, color: '#B8860B' }}>
-                        R$ {cartTotal.toFixed(2)}
-                      </Title>
-                    </div>
-                    <Button 
-                      type="primary" 
-                      size="large" 
-                      block 
-                      onClick={handleSendOrder}
-                      loading={creatingOrder}
-                      style={{ 
-                        height: 52, 
-                        fontSize: 16,
-                        fontWeight: 600
-                      }}
-                    >
-                      Enviar Pedido
-                    </Button>
-                  </div>
-                </>
-              )}
-            </Card>
-
-            {currentOrder && (
-              <Card style={{ marginTop: 24, borderRadius: 16 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text strong style={{ fontFamily: "'Playfair Display', serif", fontSize: 16 }}>
-                      Pedido Atual
-                    </Text>
-                    <OrderStatusTag status={currentOrder.status} />
-                  </div>
-                  <Divider style={{ margin: '8px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">Pedido</Text>
-                    <Text>#{currentOrder.id.slice(0, 8)}</Text>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">Itens</Text>
-                    <Text>{(currentOrder.items as any[])?.length || 0}</Text>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">Total</Text>
-                    <Text strong style={{ color: '#B8860B' }}>
-                      R$ {currentOrder.total?.toFixed(2)}
-                    </Text>
-                  </div>
-                </Space>
-              </Card>
-            )}
-          </div>
-        </Col>
-      </Row>
+      <Modal
+        open={isNoteModalOpen}
+        onCancel={() => {
+          setIsNoteModalOpen(false);
+          setPendingItem(null);
+          setPendingQty(1);
+          setNoteText('');
+        }}
+        onOk={submitOrder}
+        okText="Confirmar Pedido"
+        cancelText="Cancelar"
+        centered
+        width="92vw"
+        style={{ maxWidth: 760 }}
+        styles={{
+          content: { borderRadius: 16, padding: 22 },
+          header: { marginBottom: 8 },
+          body: { paddingTop: 6, paddingBottom: 8 },
+          footer: { marginTop: 18 }
+        }}
+        okButtonProps={{ style: { height: 58, minWidth: 190, fontSize: 22, fontWeight: 700, borderRadius: 12 } }}
+        cancelButtonProps={{ style: { height: 58, minWidth: 150, fontSize: 21, fontWeight: 600, borderRadius: 12 } }}
+      >
+        <div style={{ marginTop: 8 }}>
+          <Text strong style={{ fontSize: 32, lineHeight: 1.2, display: 'block', marginBottom: 12 }}>
+            {pendingItem ? `${pendingQty}x ${pendingItem.name}` : 'Pedido'}
+          </Text>
+          <Text style={{ fontSize: 22, color: '#555', lineHeight: 1.35, display: 'block', marginBottom: 12 }}>
+            Adicione uma observação (opcional)
+          </Text>
+          <TextArea
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="Ex.: sem cebola, ponto da carne, alergia, etc."
+            autoSize={{ minRows: 5, maxRows: 8 }}
+            maxLength={280}
+            style={{ fontSize: 22, lineHeight: 1.35, borderRadius: 12, padding: '12px 14px' }}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

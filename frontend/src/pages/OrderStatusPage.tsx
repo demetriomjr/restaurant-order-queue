@@ -1,279 +1,152 @@
-import { useState } from 'react';
-import { Typography, Space, Tag, Progress, Card, Row, Col, Descriptions, List, Badge, Divider, Empty } from 'antd';
-import { ClockCircleOutlined, CheckCircleOutlined, SyncOutlined, CoffeeOutlined } from '@ant-design/icons';
-import { useActiveOrders, useSSEConnection } from '../hooks/useOrder';
+import { Typography, Empty, Button, message, List, Modal, Row, Col, Tag } from 'antd';
+import { DeleteOutlined, ExclamationCircleOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { useActiveOrders } from '../hooks/useOrder';
+import { useMutation } from '@apollo/client';
+import { UPDATE_ORDER_STATUS } from '../apollo/queries';
+import { commandClient } from '../apollo/client';
+import { PageHeader } from '../components/PageHeader';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const statusFlow = [
-  { status: 'PENDING', label: 'Pendente', color: 'orange' },
-  { status: 'CONFIRMED', label: 'Confirmado', color: 'blue' },
-  { status: 'PREPARING', label: 'Preparando', color: 'purple' },
-  { status: 'READY', label: 'Pronto', color: 'cyan' },
-  { status: 'DELIVERED', label: 'Entregue', color: 'green' },
-  { status: 'COMPLETED', label: 'Finalizado', color: 'default' }
+  { status: 'PENDING', label: 'Pendente', color: '#F57C00' },
+  { status: 'PREPARING', label: 'Preparando', color: '#7B1FA2' },
+  { status: 'ON_THE_WAY', label: 'A caminho da mesa', color: '#148F77' },
+  { status: 'DELIVERED', label: 'Entregue', color: '#388E3C' },
+  { status: 'CANCELLED', label: 'Cancelado', color: '#D32F2F' }
 ];
 
-function getStepIndex(status: string): number {
-  return statusFlow.findIndex(s => s.status === status);
+function getStatusLabel(status: string): string {
+  const step = statusFlow.find(s => s.status === status);
+  return step?.label || status;
 }
 
-function StatusTimeline({ status }: { status: string }) {
-  const currentStep = getStepIndex(status);
-  
+function getStatusColor(status: string): string {
+  const step = statusFlow.find(s => s.status === status);
+  return step?.color || '#F57C00';
+}
+
+export default function OrderStatusPage({ tableNumber, customerName }: { tableNumber: number; customerName: string }) {
+  const tableId = `table-${tableNumber}`;
+  const { orders, loading, refetch } = useActiveOrders(tableId);
+  const [cancelMutation] = useMutation(UPDATE_ORDER_STATUS, { client: commandClient });
+
+  const activeOrders = orders.filter((o: any) => 
+    o.status !== 'DELIVERED' && o.status !== 'COMPLETED' && o.status !== 'CANCELLED'
+  );
+
+  const handleCancel = async (orderId: string) => {
+    try {
+      await cancelMutation({
+        variables: { orderId, status: 'CANCELLED' }
+      });
+      message.success('Pedido cancelado');
+    } catch (error) {
+      message.error('Erro ao cancelar pedido');
+    }
+  };
+
   return (
-    <div style={{ padding: '16px 0' }}>
-      <Row gutter={8}>
-        {statusFlow.map((step, index) => (
-          <Col span={4} key={step.status}>
-            <div style={{ textAlign: 'center', position: 'relative' }}>
-              {index <= currentStep ? (
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto',
-                  boxShadow: '0 2px 8px rgba(184, 134, 11, 0.3)'
-                }}>
-                  <CheckCircleOutlined style={{ color: 'white', fontSize: 16 }} />
-                </div>
-              ) : index === currentStep + 1 ? (
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  background: '#fff',
-                  border: `2px solid ${step.color}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto'
-                }}>
-                  <SyncOutlined spin style={{ color: step.color, fontSize: 16 }} />
-                </div>
-              ) : (
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  background: '#f5f5f5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto'
-                }}>
-                  <ClockCircleOutlined style={{ color: '#d9d9d9', fontSize: 16 }} />
-                </div>
-              )}
-              <div style={{ marginTop: 8 }}>
-                <Text strong={index === currentStep} style={{ fontSize: 11, color: index <= currentStep ? '#2C1810' : '#bfbfbf' }}>
-                  {step.label}
-                </Text>
-              </div>
-            </div>
-            {index < statusFlow.length - 1 && (
-              <div style={{
-                position: 'absolute',
-                top: 18,
-                left: '50%',
-                width: '100%',
-                height: 2,
-                background: index < currentStep ? 'linear-gradient(90deg, #B8860B 0%, #B8860B 100%)' : '#e8e2dc',
-                zIndex: -1
-              }} />
-            )}
-          </Col>
-        ))}
-      </Row>
-      <Progress 
-        percent={((currentStep + 1) / statusFlow.length) * 100} 
-        showInfo={false}
-        strokeColor="linear-gradient(90deg, #B8860B 0%, #DAA520 100%)"
-        trailColor="#E8E2DC"
-        style={{ marginTop: 24 }}
+    <div style={{ 
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'linear-gradient(180deg, #FFF9F2 0%, #FFF4E7 100%)'
+    }}>
+      <PageHeader 
+        title="Meus Pedidos" 
+        icon={<UnorderedListOutlined />} 
+        color="linear-gradient(135deg, #7B1FA2 0%, #4A148C 100%)"
+        tableNumber={tableNumber}
+        customerName={customerName}
       />
-    </div>
-  );
-}
-
-function OrderCard({ order }: { order: { id: string; tableId: string; status: string; total: number; items: Array<{ productId: string; productName: string; quantity: number; unitPrice: number }>; updatedAt: string } }) {
-  const currentStep = getStepIndex(order.status);
-  const items = order.items || [];
-
-  return (
-    <Card 
-      style={{ 
-        borderRadius: 16,
-        boxShadow: '0 4px 16px rgba(44, 24, 16, 0.08)',
-        marginBottom: 24
-      }}
-      bodyStyle={{ padding: 0 }}
-    >
-      <div style={{
-        background: 'linear-gradient(135deg, #2C1810 0%, #4A3428 100%)',
-        padding: '20px 24px',
-        color: 'white'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Space>
-            <CoffeeOutlined style={{ fontSize: 24 }} />
-            <Title level={4} style={{ color: 'white', margin: 0, fontFamily: "'Playfair Display', serif" }}>
-              Pedido #{order.id.slice(0, 8)}
-            </Title>
-          </Space>
-          <Tag 
-            color={
-              order.status === 'PENDING' ? 'orange' :
-              order.status === 'CONFIRMED' ? 'blue' :
-              order.status === 'PREPARING' ? 'purple' :
-              order.status === 'READY' ? 'cyan' :
-              order.status === 'DELIVERED' ? 'green' : 'default'
-            }
-            style={{ fontSize: 12, padding: '4px 16px' }}
-          >
-            {statusFlow[currentStep]?.label || order.status}
-          </Tag>
-        </div>
-      </div>
-
-      <div style={{ padding: 24 }}>
-        <Row gutter={24}>
-          <Col xs={24} lg={14}>
-            <Text strong style={{ fontSize: 16, fontFamily: "'Playfair Display', serif", display: 'block', marginBottom: 16 }}>
-              Status do Pedido
-            </Text>
-            <StatusTimeline status={order.status} />
-
-            <Divider />
-
-            <Text strong style={{ fontSize: 16, fontFamily: "'Playfair Display', serif", display: 'block', marginBottom: 16 }}>
-              Resumo
-            </Text>
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label="Mesa">{order.tableId}</Descriptions.Item>
-              <Descriptions.Item label="Total">
-                <Text strong style={{ color: '#B8860B', fontSize: 16 }}>
-                  R$ {order.total?.toFixed(2)}
-                </Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Itens">{items.length}</Descriptions.Item>
-              <Descriptions.Item label="Atualizado">
-                {new Date(order.updatedAt).toLocaleTimeString('pt-BR')}
-              </Descriptions.Item>
-            </Descriptions>
-          </Col>
-
-          <Col xs={24} lg={10}>
-            <Text strong style={{ fontSize: 16, fontFamily: "'Playfair Display', serif", display: 'block', marginBottom: 16 }}>
-              Itens Pedidos
-            </Text>
-            <List
-              size="small"
-              dataSource={items}
-              style={{ maxHeight: 250, overflow: 'auto' }}
-              renderItem={(item, index) => (
-                <List.Item style={{ padding: '12px 0', borderBottom: index === items.length - 1 ? 'none' : '1px solid #E8E2DC' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                    <div>
-                      <Text>{item.productName}</Text>
-                      <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-                        R$ {item.unitPrice.toFixed(2)} cada
-                      </Text>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <Badge 
-                        count={`x${item.quantity}`} 
-                        style={{ background: '#B8860B' }}
-                      />
-                      <Text strong style={{ display: 'block', color: '#B8860B' }}>
-                        R$ {(item.unitPrice * item.quantity).toFixed(2)}
-                      </Text>
-                    </div>
-                  </div>
-                </List.Item>
-              )}
-            />
-          </Col>
-        </Row>
-      </div>
-    </Card>
-  );
-}
-
-export default function OrderStatusPage() {
-  const [tableId] = useState('table-1');
-  const { orders, loading } = useActiveOrders(tableId);
-  const { connected } = useSSEConnection(tableId);
-
-  return (
-    <div style={{ padding: '24px 32px', minHeight: '100vh' }}>
-      <div style={{ marginBottom: 32 }}>
-        <Row justify="space-between" align="middle">
-          <Space align="center" size={16}>
-            <div style={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #B8860B 0%, #8B6914 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(184, 134, 11, 0.3)'
-            }}>
-              <CoffeeOutlined style={{ fontSize: 28, color: 'white' }} />
-            </div>
-            <div>
-              <Title level={2} style={{ margin: 0, fontFamily: "'Playfair Display', serif" }}>
-                Acompanhe seu Pedido
-              </Title>
-              <Text type="secondary">Mesa {tableId.split('-')[1]} • Restaurante Premium</Text>
-            </div>
-          </Space>
-          
-          <Space>
-            <Badge status={connected ? 'success' : 'error'} />
-            <Text type={connected ? 'success' : 'secondary'}>
-              {connected ? 'Tempo real' : 'Atualizando...'}
-            </Text>
-          </Space>
-        </Row>
-      </div>
       
-      {loading ? (
-        <Card style={{ borderRadius: 16 }}>
-          <div className="loading-pulse" style={{ textAlign: 'center', padding: 40 }}>
-            <Text>Carregando pedidos...</Text>
-          </div>
-        </Card>
-      ) : orders.length === 0 ? (
-        <Card style={{ borderRadius: 16, textAlign: 'center', padding: 40 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {loading ? (
+          <Empty description={<Text style={{ fontSize: 24 }}>Carregando pedidos...</Text>} />
+        ) : activeOrders.length === 0 ? (
           <Empty 
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <div>
-                <Title level={4} style={{ fontFamily: "'Playfair Display', serif" }}>
-                  Nenhum pedido ativo
-                </Title>
-                <Text type="secondary">
-                  Faça seu primeiro pedido no cardápio
+                <Text type="secondary" style={{ fontSize: 32 }}>Nenhum pedido ativo</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: 28 }}>
+                  Faça seus pedidos no Cardápio
                 </Text>
               </div>
-            }
+            } 
           />
-        </Card>
-      ) : (
-        <div className="fade-in-up">
-          {orders.map((order) => (
-            <div key={order.id}>
-              <OrderCard order={order} />
-            </div>
-          ))}
-        </div>
-      )}
+        ) : (
+          <List
+            dataSource={activeOrders}
+            renderItem={(order: any) => {
+              const color = getStatusColor(order.status);
+              const statusLabel = getStatusLabel(order.status);
+              const isActive = order.status !== 'DELIVERED' && order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
+              const items = (order.items as any[]) || [];
+
+              const handleCancelClick = () => {
+                Modal.confirm({
+                  title: 'Cancelar Pedido',
+                  icon: <ExclamationCircleOutlined />,
+                  content: 'Tem certeza que deseja cancelar este pedido?',
+                  centered: true,
+                  width: 560,
+                  okText: 'Sim, cancelar',
+                  okButtonProps: { 
+                    danger: true,
+                    style: { height: 48, fontSize: 18, fontWeight: 700, borderRadius: 10, paddingInline: 20 }
+                  },
+                  cancelText: 'Não',
+                  cancelButtonProps: {
+                    style: { height: 48, fontSize: 18, fontWeight: 600, borderRadius: 10, paddingInline: 20 }
+                  },
+                  styles: {
+                    body: { fontSize: 20, paddingTop: 16, paddingBottom: 12 }
+                  },
+                  onOk() {
+                    handleCancel(order.id);
+                    setTimeout(() => refetch(), 500);
+                  }
+                });
+              };
+
+              return (
+                <List.Item style={{ padding: '16px 0', borderBottom: '2px solid #eee' }}>
+                  <Row style={{ width: '100%' }} gutter={16}>
+                    <Col span={isActive ? 20 : 24}>
+                      <Tag color={color} style={{ fontSize: 20, padding: '8px 16px', marginBottom: 12 }}>
+                        {statusLabel}
+                      </Tag>
+                      <List
+                        dataSource={items}
+                        renderItem={(item: any) => (
+                          <List.Item style={{ padding: '8px 0', border: 'none' }}>
+                            <Text strong style={{ fontSize: 32 }}>{item.quantity}x {item.productName}</Text>
+                          </List.Item>
+                        )}
+                      />
+                    </Col>
+                    {isActive && (
+                      <Col span={4} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <Button 
+                          danger 
+                          size="large"
+                          icon={<DeleteOutlined style={{ fontSize: 28 }} />}
+                          onClick={handleCancelClick}
+                          style={{ fontSize: 24, height: 64 }}
+                        >
+                          Cancelar
+                        </Button>
+                      </Col>
+                    )}
+                  </Row>
+                </List.Item>
+              );
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -1,31 +1,91 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Product } from '@prisma/client';
 import * as amqp from 'amqplib';
 import { sseClients } from './sse.js';
 import { pubsub } from './pubsub.js';
 
 const prisma = new PrismaClient();
 let channel: amqp.Channel;
+const EXCHANGE_NAME = 'domain_events';
+const QUEUE_NAME = process.env.RABBITMQ_QUEUE_NAME || 'query_service_order_projection';
 
-interface DomainEvent {
-  type: string;
-  payload: any;
-  occurredAt: Date;
+interface OrderItemPayload {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  notes?: string;
 }
+
+type DomainEvent =
+  | {
+      type: 'ORDER_CREATED';
+      payload: {
+        orderId: string;
+        tableId: string;
+        status: string;
+        total: number;
+        pendingStartedAt?: string;
+        items: OrderItemPayload[];
+      };
+      occurredAt: string;
+    }
+  | {
+      type: 'ORDER_STATUS_CHANGED';
+      payload: {
+        orderId: string;
+        tableId?: string;
+        newStatus: string;
+        preparingStartedAt?: string;
+        onTheWayStartedAt?: string;
+      };
+      occurredAt: string;
+    }
+  | {
+      type: 'ORDER_ITEM_ADDED';
+      payload: { orderId: string; tableId?: string; item: OrderItemPayload };
+      occurredAt: string;
+    }
+  | {
+      type: 'ORDER_ITEM_REMOVED';
+      payload: { orderId: string; tableId?: string; productId: string };
+      occurredAt: string;
+    }
+  | {
+      type: string;
+      payload: Record<string, unknown>;
+      occurredAt: string;
+    };
+
+interface QueryOrder {
+  id: string;
+  tableId: string;
+  total: number;
+  items: unknown;
+}
+
+let menuCache: Product[] = [];
 
 async function connectRabbitMQ() {
   const url = process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost:5672';
   const connection = await amqp.connect(url);
-  channel = connection.createChannel();
-  await channel.assertExchange('domain_events', 'fanout', { durable: true });
+  channel = await connection.createChannel();
+  await channel.assertExchange(EXCHANGE_NAME, 'fanout', { durable: true });
   
-  const queue = await channel.assertQueue('', { exclusive: true });
-  channel.bindQueue(queue.queue, 'domain_events', '');
+  const queue = await channel.assertQueue(QUEUE_NAME, { durable: true });
+  await channel.bindQueue(queue.queue, EXCHANGE_NAME, '');
+  await channel.prefetch(10);
   
   channel.consume(queue.queue, async (msg) => {
     if (msg) {
-      const event: DomainEvent = JSON.parse(msg.content.toString());
-      await handleDomainEvent(event);
-      channel.ack(msg);
+      try {
+        console.log('RabbitMQ received message:', msg.content.toString().slice(0, 200));
+        const event: DomainEvent = JSON.parse(msg.content.toString());
+        await handleDomainEvent(event);
+        channel.ack(msg);
+      } catch (error) {
+        console.error('Failed to process RabbitMQ message', error);
+        channel.nack(msg, false, false);
+      }
     }
   });
 
@@ -34,30 +94,54 @@ async function connectRabbitMQ() {
 
 async function handleDomainEvent(event: DomainEvent) {
   const { type, payload } = event;
-  const tableId = payload.tableId;
+  const occurredAt = new Date(event.occurredAt);
+  console.log('Handling event:', type, payload.orderId, payload.tableId);
 
   switch (type) {
     case 'ORDER_CREATED': {
-      await readModelRepository.upsertOrder(
-        payload.orderId,
-        payload.tableId,
-        'PENDING',
-        payload.items.reduce((sum: number, item: any) => sum + item.unitPrice * item.quantity, 0),
-        payload.items
-      );
-      sseClients.broadcast(tableId, { type, payload, occurredAt: event.occurredAt });
-      sseClients.broadcast('all', { type, payload, occurredAt: event.occurredAt });
-      pubsub.publish(`ORDER_UPDATED_${tableId}`, { orderUpdated: { ...payload, status: 'PENDING' } });
-      pubsub.publish('ORDER_UPDATED_ALL', { orderUpdated: { ...payload, status: 'PENDING' } });
+      const tableId = payload.tableId;
+      const pendingStartedAt = payload.pendingStartedAt ? new Date(payload.pendingStartedAt) : occurredAt;
+      const order = await prisma.order.upsert({
+        where: { id: payload.orderId },
+        create: {
+          id: payload.orderId,
+          tableId: payload.tableId,
+          status: 'PENDING',
+          total: payload.total,
+          pendingStartedAt,
+          items: payload.items
+        },
+        update: {
+          status: 'PENDING',
+          total: payload.total,
+          pendingStartedAt,
+          items: payload.items
+        }
+      });
+      sseClients.broadcast(tableId, { type, payload });
+      sseClients.broadcast('all', { type, payload });
+      console.log('Broadcast sent for:', type, 'to table:', tableId, 'and all');
+      pubsub.publish(`ORDER_UPDATED_${tableId}`, { orderUpdated: order });
+      pubsub.publish('ORDER_UPDATED_ALL', { orderUpdated: order });
       break;
     }
 
     case 'ORDER_STATUS_CHANGED': {
-      const existingOrder = await readModelRepository.findById(payload.orderId);
+      const existingOrder = await prisma.order.findUnique({ where: { id: payload.orderId } });
       if (existingOrder) {
-        const updatedOrder = await readModelRepository.updateStatus(payload.orderId, payload.newStatus);
-        sseClients.broadcast(tableId, { type, payload, occurredAt: event.occurredAt });
-        sseClients.broadcast('all', { type, payload, occurredAt: event.occurredAt });
+        const tableId = payload.tableId ?? existingOrder.tableId;
+        const preparingStartedAt = payload.preparingStartedAt ? new Date(payload.preparingStartedAt) : occurredAt;
+        const onTheWayStartedAt = payload.onTheWayStartedAt ? new Date(payload.onTheWayStartedAt) : occurredAt;
+        const updatedOrder = await prisma.order.update({
+          where: { id: payload.orderId },
+          data: {
+            status: payload.newStatus,
+            preparingStartedAt: payload.newStatus === 'PREPARING' ? preparingStartedAt : undefined,
+            onTheWayStartedAt: payload.newStatus === 'ON_THE_WAY' ? onTheWayStartedAt : undefined
+          }
+        });
+        sseClients.broadcast(tableId, { type, payload });
+        sseClients.broadcast('all', { type, payload });
         pubsub.publish(`ORDER_UPDATED_${tableId}`, { orderUpdated: updatedOrder });
         pubsub.publish('ORDER_UPDATED_ALL', { orderUpdated: updatedOrder });
       }
@@ -65,92 +149,68 @@ async function handleDomainEvent(event: DomainEvent) {
     }
 
     case 'ORDER_ITEM_ADDED': {
-      const existingOrder = await readModelRepository.findById(payload.orderId);
+      const existingOrder = await prisma.order.findUnique({ where: { id: payload.orderId } }) as QueryOrder | null;
       if (existingOrder) {
-        const items = [...(existingOrder.items as any[]), payload.item];
-        const total = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-        const updatedOrder = await readModelRepository.upsertOrder(payload.orderId, tableId, existingOrder.status, total, items);
-        sseClients.broadcast(tableId, { type, payload, occurredAt: event.occurredAt });
+        const tableId = payload.tableId ?? existingOrder.tableId;
+        const items = (Array.isArray(existingOrder.items) ? existingOrder.items : []) as OrderItemPayload[];
+        const newTotal = existingOrder.total + payload.item.unitPrice * payload.item.quantity;
+        const updatedOrder = await prisma.order.update({
+          where: { id: payload.orderId },
+          data: { total: newTotal, items: [...items, payload.item] }
+        });
+        sseClients.broadcast(tableId, { type, payload });
+        sseClients.broadcast('all', { type, payload });
         pubsub.publish(`ORDER_UPDATED_${tableId}`, { orderUpdated: updatedOrder });
+        pubsub.publish('ORDER_UPDATED_ALL', { orderUpdated: updatedOrder });
       }
       break;
     }
 
     case 'ORDER_ITEM_REMOVED': {
-      const existingOrder = await readModelRepository.findById(payload.orderId);
+      const existingOrder = await prisma.order.findUnique({ where: { id: payload.orderId } }) as QueryOrder | null;
       if (existingOrder) {
-        const items = (existingOrder.items as any[]).filter((i: any) => i.productId !== payload.productId);
-        const total = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-        const updatedOrder = await readModelRepository.upsertOrder(payload.orderId, tableId, existingOrder.status, total, items);
-        sseClients.broadcast(tableId, { type, payload, occurredAt: event.occurredAt });
-        pubsub.publish(`ORDER_UPDATED_${tableId}`, { orderUpdated: updatedOrder });
+        const tableId = payload.tableId ?? existingOrder.tableId;
+        const items = (Array.isArray(existingOrder.items) ? existingOrder.items : []) as OrderItemPayload[];
+        const itemToRemove = items.find((i) => i.productId === payload.productId);
+        if (itemToRemove) {
+          const newItems = items.filter((i) => i.productId !== payload.productId);
+          const newTotal = existingOrder.total - (itemToRemove.unitPrice * itemToRemove.quantity);
+          const updatedOrder = await prisma.order.update({
+            where: { id: payload.orderId },
+            data: { total: newTotal, items: newItems }
+          });
+          sseClients.broadcast(tableId, { type, payload });
+          sseClients.broadcast('all', { type, payload });
+          pubsub.publish(`ORDER_UPDATED_${tableId}`, { orderUpdated: updatedOrder });
+          pubsub.publish('ORDER_UPDATED_ALL', { orderUpdated: updatedOrder });
+        }
       }
       break;
     }
+    default:
+      console.warn('Ignoring unsupported event type:', type);
   }
 }
 
-export const readModelRepository = {
-  async upsertOrder(orderId: string, tableId: string, status: string, total: number, items: any[]) {
-    return prisma.orderRead.upsert({
-      where: { id: orderId },
-      create: { id: orderId, tableId, status, total, items },
-      update: { status, total, items, updatedAt: new Date() }
-    });
-  },
-
-  async updateStatus(orderId: string, status: string) {
-    return prisma.orderRead.update({
-      where: { id: orderId },
-      data: { status, updatedAt: new Date() }
-    });
-  },
-
-  async findById(id: string) {
-    return prisma.orderRead.findUnique({ where: { id } });
-  },
-
-  async findByTableId(tableId: string) {
-    return prisma.orderRead.findMany({
-      where: { tableId },
-      orderBy: { updatedAt: 'desc' }
-    });
-  },
-
-  async findActiveByTableId(tableId: string) {
-    const activeStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'DELIVERED'];
-    return prisma.orderRead.findMany({
-      where: { tableId, status: { in: activeStatuses } },
-      orderBy: { createdAt: 'asc' }
-    });
-  },
-
-  async findAllActive() {
-    const activeStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'DELIVERED'];
-    return prisma.orderRead.findMany({
-      where: { status: { in: activeStatuses } },
-      orderBy: { createdAt: 'asc' }
-    });
-  }
-};
+async function loadMenuCache() {
+  menuCache = await prisma.product.findMany({
+    where: { available: true },
+    orderBy: { category: 'asc' }
+  });
+  console.log(`Menu cache loaded: ${menuCache.length} items`);
+}
 
 export const menuRepository = {
-  async findAll() {
-    return prisma.product.findMany({
-      where: { available: true },
-      orderBy: { category: 'asc' }
-    });
+  findAll() {
+    return menuCache;
   },
 
-  async findByCategory(category: string) {
-    return prisma.product.findMany({
-      where: { category, available: true }
-    });
-  },
-
-  async createMenuItem(data: { name: string; description: string; category: string; price: number }) {
-    return prisma.product.create({ data });
+  findByCategory(category: string) {
+    return menuCache.filter(p => p.category === category);
   }
 };
 
-export { prisma, connectRabbitMQ };
+export { prisma, connectRabbitMQ, loadMenuCache };
+export const __test__ = {
+  handleDomainEvent
+};

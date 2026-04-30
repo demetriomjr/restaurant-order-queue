@@ -7,9 +7,18 @@ export const GET_ALL_ORDERS = gql`
       tableId
       status
       total
-      items
+      items {
+        productId
+        productName
+        quantity
+        unitPrice
+        notes
+      }
       updatedAt
       createdAt
+      pendingStartedAt
+      preparingStartedAt
+      onTheWayStartedAt
     }
   }
 `;
@@ -21,9 +30,18 @@ export const GET_PENDING_ORDERS = gql`
       tableId
       status
       total
-      items
+      items {
+        productId
+        productName
+        quantity
+        unitPrice
+        notes
+      }
       updatedAt
       createdAt
+      pendingStartedAt
+      preparingStartedAt
+      onTheWayStartedAt
     }
   }
 `;
@@ -44,8 +62,17 @@ export const ORDER_UPDATED_SUBSCRIPTION = gql`
       tableId
       status
       total
-      items
+      items {
+        productId
+        productName
+        quantity
+        unitPrice
+        notes
+      }
       updatedAt
+      pendingStartedAt
+      preparingStartedAt
+      onTheWayStartedAt
     }
   }
 `;

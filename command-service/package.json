@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "npm install && npx prisma generate && npx prisma db push --accept-data-loss && tsx watch src/server.ts",
     "build": "tsc",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",

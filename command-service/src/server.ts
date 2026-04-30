@@ -1,34 +1,17 @@
 import cors from 'cors';
 import express from 'express';
 import { createYoga } from 'graphql-yoga';
-import { makeSchema } from 'nexus';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-
-import { Mutation } from './graphql/Mutation.js';
-import { Query } from './graphql/Query.js';
-import { Order, OrderItem, OrderItemInput } from './graphql/types.js';
+import { createServer } from 'net';
 import { connectRabbitMQ } from './infrastructure/persistence.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { schema } from './interfaces/graphql/schema.js';
 
 const DEFAULT_PORT = 4001;
 const PORT_RANGE_START = 4001;
 const PORT_RANGE_END = 4010;
 
-const schema = makeSchema({
-  types: [Query, Mutation, Order, OrderItem, OrderItemInput],
-  outputs: {
-    schema: path.join(__dirname, '../generated/schema.graphql'),
-    typegen: path.join(__dirname, '../generated/nexus.ts')
-  }
-});
-
 function findAvailablePort(startPort: number, endPort: number): Promise<number> {
   return new Promise((resolve) => {
-    const net = require('net');
-    const server = net.createServer();
+    const server = createServer();
 
     server.once('error', () => {
       if (startPort < endPort) {
@@ -49,7 +32,7 @@ function findAvailablePort(startPort: number, endPort: number): Promise<number> 
 async function main(): Promise<void> {
   const port = await findAvailablePort(PORT_RANGE_START, PORT_RANGE_END);
   const corsOptions = {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:5174'],
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:6173', 'http://localhost:6174'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -59,7 +42,6 @@ async function main(): Promise<void> {
 
   const yoga = createYoga({
     schema,
-    context: () => ({}),
     graphiql: true
   });
 
